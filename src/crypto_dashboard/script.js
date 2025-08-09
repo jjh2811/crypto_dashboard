@@ -4,11 +4,16 @@ document.addEventListener("DOMContentLoaded", () => {
     // TODO: 백엔드에서 초기 잔고 데이터를 가져와서 화면에 표시해야 합니다.
     // 이 부분은 백엔드와 연동하면서 구현합니다.
 
-    const websocket = new WebSocket("ws://localhost:8080/ws"); // 백엔드 웹소켓 서버 주소
+    const websocket = new WebSocket(`ws://${window.location.host}/ws`); // 백엔드 웹소켓 서버 주소
 
     websocket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        updateCryptoCard(data);
+        console.log("Received data:", event.data);
+        try {
+            const data = JSON.parse(event.data);
+            updateCryptoCard(data);
+        } catch (e) {
+            console.error("Failed to parse JSON:", e);
+        }
     };
 
     websocket.onopen = () => {
@@ -17,6 +22,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     websocket.onerror = (error) => {
         console.error("WebSocket error:", error);
+        // 추가적인 에러 정보 로깅
+        console.log("WebSocket error object:", JSON.stringify(error, ["message", "name", "type"]));
     };
 
     function updateCryptoCard(data) {
