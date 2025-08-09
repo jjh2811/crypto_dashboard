@@ -16,12 +16,6 @@ stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(log_formatter)
 logger.addHandler(stream_handler)
 
-# 파일 핸들러
-file_handler = logging.FileHandler('crypto_dashboard.log')
-file_handler.setFormatter(log_formatter)
-logger.addHandler(file_handler)
-
-
 async def get_binance_balance():
     """
     바이낸스 계정의 잔고 정보를 가져옵니다.
