@@ -32,14 +32,15 @@ h1 {
     color: #333;
 }
 
-.crypto-card .amount {
-    font-size: 1.2em;
+.crypto-card .amount, .crypto-card .price {
+    font-size: 1.1em;
     color: #5f6368;
+    margin: 5px 0;
 }
 
-.crypto-card .price {
-    font-size: 1.8em;
+.crypto-card .value {
+    font-size: 1.5em;
     font-weight: bold;
-    color: #1a73e8;
+    color: #28a745;
     margin-top: 10px;
 }

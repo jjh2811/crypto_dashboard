@@ -27,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     function updateCryptoCard(data) {
-        const { symbol, price, amount } = data;
+        const { symbol, price, amount, value } = data;
         let card = document.getElementById(symbol);
 
         if (!card) {
@@ -40,7 +40,8 @@ document.addEventListener("DOMContentLoaded", () => {
         card.innerHTML = `
             <h2>${symbol}</h2>
             <p class="amount">Amount: ${amount}</p>
-            <p class="price">$${parseFloat(price).toFixed(2)}</p>
+            <p class="price">Price: $${parseFloat(price).toFixed(2)}</p>
+            <p class="value">Value: $${parseFloat(value).toFixed(2)}</p>
         `;
     }
 });

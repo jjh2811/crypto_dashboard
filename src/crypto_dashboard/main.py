@@ -82,7 +82,10 @@ async def handle_websocket(request):
     try:
         if balances_cache:
             for symbol, data in balances_cache.items():
-                 await ws.send_json({'symbol': symbol, 'amount': data['amount'], 'price': data.get('price', 'N/A')})
+                 price = data.get('price', 0)
+                 amount = data.get('amount', 0)
+                 value = float(price) * float(amount)
+                 await ws.send_json({'symbol': symbol, 'amount': amount, 'price': price, 'value': value})
 
         # on_shutdown에서 연결이 닫히면 이 루프는 자동으로 종료됩니다.
         async for msg in ws:
@@ -139,7 +142,9 @@ async def binance_data_fetcher(app):
                             if symbol in balances_cache:
                                 balances_cache[symbol]['price'] = price
                                 
-                            update_message = {'symbol': symbol, 'amount': balances_cache[symbol]['amount'], 'price': price}
+                            amount = balances_cache[symbol]['amount']
+                            value = float(price) * float(amount)
+                            update_message = {'symbol': symbol, 'amount': amount, 'price': price, 'value': value}
                             for ws in list(clients):
                                 try:
                                     await ws.send_json(update_message)
