@@ -10,7 +10,14 @@ document.addEventListener("DOMContentLoaded", () => {
         console.log("Received data:", event.data);
         try {
             const data = JSON.parse(event.data);
-            updateCryptoCard(data);
+            if (data.type === 'remove') {
+                const card = document.getElementById(data.symbol);
+                if (card) {
+                    card.remove();
+                }
+            } else {
+                updateCryptoCard(data);
+            }
         } catch (e) {
             console.error("Failed to parse JSON:", e);
         }
