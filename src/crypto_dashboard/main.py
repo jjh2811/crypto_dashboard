@@ -116,9 +116,10 @@ async def handle_websocket(request):
                             try:
                                 await binance_exchange.cancel_order(order['id'], order['symbol'])
                                 logger.info(f"Successfully sent cancel request for order {order['id']}")
-                                # Optimistically remove from cache and notify clients
+                                # Optimistically remove from cache and trigger subscription update
                                 if order['id'] in orders_cache:
                                     del orders_cache[order['id']]
+                                    await update_subscriptions_if_needed(request.app)
                             except Exception as e:
                                 logger.error(f"Failed to cancel order {order['id']}: {e}")
                         
@@ -241,34 +242,39 @@ import aiohttp
 
 async def update_subscriptions_if_needed(app):
     """필요에 따라 가격 정보 구독을 업데이트합니다."""
-    websocket = app.get('price_ws')
-    if not websocket or websocket.state != websockets.protocol.State.OPEN:
-        logger.warning("Price websocket not available for subscription update.")
+    lock = app.get('subscription_lock')
+    if not lock:
         return
 
-    async def send_subscription_message(method, assets):
-        if not assets:
+    async with lock:
+        websocket = app.get('price_ws')
+        if not websocket or websocket.state != websockets.protocol.State.OPEN:
+            logger.warning("Price websocket not available for subscription update.")
             return
-        streams = [f"{asset.lower()}usdt@miniTicker" for asset in assets]
-        message = json.dumps({"method": method, "params": streams, "id": int(asyncio.get_running_loop().time())})
-        await websocket.send(message)
-        logger.info(f"Sent {method} for: {streams}")
 
-    holding_assets = set(balances_cache.keys())
-    order_assets = {order['symbol'].replace('USDT', '').replace('/', '') for order in orders_cache.values()}
-    required_assets = (holding_assets | order_assets) - {'USDT'}
-    
-    current_assets = app.get('tracked_assets', set())
-    
-    to_add = required_assets - current_assets
-    to_remove = current_assets - required_assets
+        async def send_subscription_message(method, assets):
+            if not assets:
+                return
+            streams = [f"{asset.lower()}usdt@miniTicker" for asset in assets]
+            message = json.dumps({"method": method, "params": streams, "id": int(asyncio.get_running_loop().time())})
+            await websocket.send(message)
+            logger.info(f"Sent {method} for: {streams}")
 
-    await send_subscription_message("SUBSCRIBE", list(to_add))
-    await send_subscription_message("UNSUBSCRIBE", list(to_remove))
+        holding_assets = set(balances_cache.keys())
+        order_assets = {order['symbol'].replace('USDT', '').replace('/', '') for order in orders_cache.values()}
+        required_assets = (holding_assets | order_assets) - {'USDT'}
+        
+        current_assets = app.get('tracked_assets', set())
+        
+        to_add = required_assets - current_assets
+        to_remove = current_assets - required_assets
 
-    app['tracked_assets'] = required_assets
-    if to_add or to_remove:
-        logger.info(f"Subscription updated. Added: {to_add}, Removed: {to_remove}. Current: {required_assets}")
+        await send_subscription_message("SUBSCRIBE", list(to_add))
+        await send_subscription_message("UNSUBSCRIBE", list(to_remove))
+
+        app['tracked_assets'] = required_assets
+        if to_add or to_remove:
+            logger.info(f"Subscription updated. Added: {to_add}, Removed: {to_remove}. Current: {required_assets}")
 
 async def get_listen_key(exchange):
     """바이낸스에서 현물 User Data Stream을 위한 listen key를 받아옵니다."""
@@ -448,6 +454,7 @@ async def on_startup(app):
         order_assets = {o['symbol'].replace('USDT', '').replace('/', '') for o in orders_cache.values()}
         app['tracked_assets'] = (holding_assets | order_assets) - {'USDT'}
         app['price_ws_ready'] = asyncio.Event()
+        app['subscription_lock'] = asyncio.Lock()
         
         # 가격 정보 fetcher 시작
         app['fetcher_task'] = asyncio.create_task(binance_data_fetcher(app))
