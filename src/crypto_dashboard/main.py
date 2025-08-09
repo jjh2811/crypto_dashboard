@@ -211,7 +211,7 @@ def init_app():
     app.router.add_get('/{filename}', http_handler)
     return app
 
-if __name__ == "__main__":
+def main():
     try:
         with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
             config = json.load(f)
@@ -227,3 +227,6 @@ if __name__ == "__main__":
     # access_log=None으로 기본 로거를 비활성화하여 로그 출력 시점 문제를 해결합니다.
     web.run_app(app, host=host, port=port, access_log=None)
     logger.info("Server shutdown complete.")
+
+if __name__ == "__main__":
+    main()
