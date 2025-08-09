@@ -171,8 +171,10 @@ async def binance_data_fetcher(app):
     """
     try:
         global balances_cache
-        # balances_cache is now populated at startup, so we use it directly.
-        assets = [asset for asset in balances_cache.keys() if asset != 'USDT']
+        # Get assets from both holdings and open orders
+        holding_assets = set(balances_cache.keys())
+        order_assets = {order['symbol'].replace('USDT', '') for order in orders_cache.values()}
+        assets = list((holding_assets | order_assets) - {'USDT'})
 
         for ws in list(clients):
             try:

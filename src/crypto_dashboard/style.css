@@ -44,6 +44,28 @@ h1 {
     border-top: none;
 }
 
+#total-value-container {
+    text-align: center;
+    margin: 20px 0;
+    padding: 20px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+#total-value-container h2 {
+    margin: 0;
+    color: #5f6368;
+    font-size: 1.2em;
+}
+
+#total-value {
+    margin: 10px 0 0;
+    font-size: 2.5em;
+    font-weight: bold;
+    color: #1a73e8;
+}
+
 #crypto-container, #orders-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -85,6 +107,10 @@ h1 {
     font-size: 0.8em;
     color: #6c757d;
     margin-top: 10px;
+}
+
+.crypto-card .price-diff {
+    font-weight: bold;
 }
 
 .crypto-card {
