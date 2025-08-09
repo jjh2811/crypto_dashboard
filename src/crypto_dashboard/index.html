@@ -8,8 +8,26 @@
 </head>
 <body>
     <h1>My Crypto Dashboard</h1>
-    <div id="crypto-container">
-        <!-- 코인 정보가 여기에 동적으로 추가됩니다. -->
+    <div class="tab-container">
+        <button class="tab-button active" onclick="openTab(event, 'holdings')">보유 목록</button>
+        <button class="tab-button" onclick="openTab(event, 'orders')">주문 목록</button>
+    </div>
+
+    <div id="holdings" class="tab-content" style="display: block;">
+        <div id="crypto-container">
+            <!-- 코인 정보가 여기에 동적으로 추가됩니다. -->
+        </div>
+    </div>
+
+    <div id="orders" class="tab-content">
+        <div class="order-controls">
+            <button id="cancel-selected-btn">선택 주문 취소</button>
+            <button id="cancel-all-btn">전체 주문 취소</button>
+        </div>
+        <div id="orders-container">
+            <!-- 주문 정보가 여기에 동적으로 추가됩니다. -->
+            <p>현재 활성화된 주문이 없습니다.</p>
+        </div>
     </div>
     <script src="script.js"></script>
 </body>

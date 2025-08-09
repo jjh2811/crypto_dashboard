@@ -64,6 +64,7 @@ async def get_binance_balance():
 
 clients = set()
 balances_cache = {}
+orders_cache = {} # To cache open orders
 binance_exchange = None # Binance exchange instance
 fetcher_task = None # To hold the price fetcher task
 
@@ -82,16 +83,81 @@ async def handle_websocket(request):
     logger.info(f"Total clients: {len(clients)}")
 
     try:
+        # Send initial holdings data
         if balances_cache:
             for symbol, data in balances_cache.items():
-                 price = data.get('price', 0)
-                 amount = data.get('amount', 0)
-                 value = float(price) * float(amount)
-                 await ws.send_json({'symbol': symbol, 'amount': amount, 'price': price, 'value': value})
+                price = data.get('price', 0)
+                amount = data.get('amount', 0)
+                value = float(price) * float(amount)
+                await ws.send_json({'symbol': symbol, 'amount': amount, 'price': price, 'value': value})
+        
+        # Send initial open orders data
+        if orders_cache:
+            update_message = {'type': 'orders_update', 'data': list(orders_cache.values())}
+            try:
+                await ws.send_json(update_message)
+            except ConnectionResetError:
+                logger.warning("Failed to send initial 'orders_update' to a newly connected client.")
 
         # on_shutdown에서 연결이 닫히면 이 루프는 자동으로 종료됩니다.
         async for msg in ws:
-            pass
+            if msg.type == web.WSMsgType.TEXT:
+                try:
+                    data = json.loads(msg.data)
+                    msg_type = data.get('type')
+
+                    if not binance_exchange:
+                        logger.error("Exchange is not initialized. Cannot process order cancellation.")
+                        continue
+
+                    if msg_type == 'cancel_orders':
+                        orders_to_cancel = data.get('orders', [])
+                        logger.info(f"Received request to cancel {len(orders_to_cancel)} orders.")
+                        for order in orders_to_cancel:
+                            try:
+                                await binance_exchange.cancel_order(order['id'], order['symbol'])
+                                logger.info(f"Successfully sent cancel request for order {order['id']}")
+                                # Optimistically remove from cache and notify clients
+                                if order['id'] in orders_cache:
+                                    del orders_cache[order['id']]
+                            except Exception as e:
+                                logger.error(f"Failed to cancel order {order['id']}: {e}")
+                        
+                        # Send updated list to all clients
+                        update_message = {'type': 'orders_update', 'data': list(orders_cache.values())}
+                        for ws in list(clients):
+                            try:
+                                await ws.send_json(update_message)
+                            except ConnectionResetError:
+                                logger.warning("Failed to send 'orders_update' after cancellation.")
+                    
+                    elif msg_type == 'cancel_all_orders':
+                        logger.info("Received request to cancel all orders.")
+                        all_orders = list(orders_cache.values())
+                        if not all_orders:
+                            logger.info("No open orders to cancel.")
+                            continue
+                        
+                        for order in all_orders:
+                             try:
+                                await binance_exchange.cancel_order(order['id'], order['symbol'])
+                                logger.info(f"Successfully sent cancel request for order {order['id']}")
+                             except Exception as e:
+                                logger.error(f"Failed to cancel order {order['id']}: {e}")
+                        
+                        # Clear cache and send update
+                        orders_cache.clear()
+                        update_message = {'type': 'orders_update', 'data': []}
+                        for ws in list(clients):
+                            try:
+                                await ws.send_json(update_message)
+                            except ConnectionResetError:
+                                logger.warning("Failed to send 'orders_update' after cancelling all.")
+
+                except json.JSONDecodeError:
+                    logger.warning(f"Received non-JSON message: {msg.data}")
+            elif msg.type == web.WSMsgType.ERROR:
+                logger.error(f'ws connection closed with exception {ws.exception()}')
     except asyncio.CancelledError:
         logger.info(f"Websocket handler for {request.remote} cancelled.")
     finally:
@@ -105,14 +171,8 @@ async def binance_data_fetcher(app):
     """
     try:
         global balances_cache
-        balances = await get_binance_balance()
-        if balances is None:
-            logger.error("Could not fetch balance. Exiting data fetcher.")
-            return
-
-        assets = [asset for asset in balances.keys() if asset != 'USDT']
-        for asset, amount in balances.items():
-            balances_cache[asset] = {'amount': amount}
+        # balances_cache is now populated at startup, so we use it directly.
+        assets = [asset for asset in balances_cache.keys() if asset != 'USDT']
 
         for ws in list(clients):
             try:
@@ -220,7 +280,9 @@ async def user_data_stream_fetcher(app, listen_key):
                 while True:
                     message = await websocket.recv()
                     data = json.loads(message)
-                    if data.get('e') == 'outboundAccountPosition':
+                    event_type = data.get('e')
+
+                    if event_type == 'outboundAccountPosition':
                         for balance in data['B']:
                             asset = balance['a']
                             free_amount = float(balance['f'])
@@ -228,11 +290,9 @@ async def user_data_stream_fetcher(app, listen_key):
                             is_existing = asset in balances_cache
                             is_positive = free_amount > 0
 
-                            # 새로운 코인이 생겼거나, 기존 코인이 전부 매도되었을 때만 처리
                             if is_positive and not is_existing:
                                 logger.info(f"New asset detected: {asset}, amount: {free_amount}")
-                                balances_cache[asset] = {'amount': free_amount}
-                                # 가격 스트리머 재시작
+                                balances_cache[asset] = {'amount': free_amount, 'price': 0}
                                 if fetcher_task:
                                     fetcher_task.cancel()
                                 fetcher_task = asyncio.create_task(binance_data_fetcher(app))
@@ -243,14 +303,45 @@ async def user_data_stream_fetcher(app, listen_key):
                                 del balances_cache[asset]
                                 for ws in list(clients):
                                     try:
-                                        await ws.send_json({'type': 'remove', 'symbol': asset})
+                                        await ws.send_json({'type': 'remove_holding', 'symbol': asset})
                                     except ConnectionResetError:
-                                        logger.warning("Failed to send 'remove' message to a client.")
-                                # 가격 스트리머 재시작
+                                        logger.warning("Failed to send 'remove_holding' message to a client.")
                                 if fetcher_task:
                                     fetcher_task.cancel()
                                 fetcher_task = asyncio.create_task(binance_data_fetcher(app))
                                 logger.info(f"Restarting price fetcher after selling asset: {asset}")
+                    
+                    elif event_type == 'executionReport':
+                        order_id = data['i']
+                        symbol = data['s']
+                        status = data['X']
+                        
+                        if status in ['NEW', 'PARTIALLY_FILLED']:
+                            price = float(data['p'])
+                            amount = float(data['q'])
+                            orders_cache[order_id] = {
+                                'id': order_id,
+                                'symbol': symbol,
+                                'side': data['S'],
+                                'price': price,
+                                'amount': amount,
+                                'value': price * amount,
+                                'timestamp': data['T'],
+                                'status': status
+                            }
+                            logger.info(f"New/updated order: {order_id} - {symbol} {status}")
+                        else: # CANCELED, FILLED, REJECTED, EXPIRED
+                            if order_id in orders_cache:
+                                del orders_cache[order_id]
+                                logger.info(f"Order {order_id} removed from cache.")
+
+                        # Send the entire open orders list to all clients
+                        update_message = {'type': 'orders_update', 'data': list(orders_cache.values())}
+                        for ws in list(clients):
+                            try:
+                                await ws.send_json(update_message)
+                            except ConnectionResetError:
+                                logger.warning("Failed to send 'orders_update' to a client.")
 
         except websockets.ConnectionClosed:
             logger.warning("User Data Stream connection closed. Reconnecting in 5 seconds...")
@@ -279,7 +370,10 @@ async def on_startup(app):
             'apiKey': api_key,
             'secret': secret_key,
             'enableRateLimit': True,
-            'options': {'defaultType': 'spot'},
+            'options': {
+                'defaultType': 'spot',
+                'warnOnFetchOpenOrdersWithoutSymbol': False,
+            },
         })
 
         # 초기 잔고 가져오기
@@ -292,6 +386,34 @@ async def on_startup(app):
         fetcher_task = asyncio.create_task(binance_data_fetcher(app))
         app['fetcher_task'] = fetcher_task
         logger.info("Price fetcher background task started.")
+
+        # 초기 미체결 주문 가져오기
+        try:
+            open_orders = await binance_exchange.fetch_open_orders()
+            for order in open_orders:
+                price = float(order.get('price') or 0)
+                amount = float(order.get('amount') or 0)
+                orders_cache[order['id']] = {
+                    'id': order['id'],
+                    'symbol': order['symbol'],
+                    'side': order['side'],
+                    'price': price,
+                    'amount': amount,
+                    'value': price * amount,
+                    'timestamp': order['timestamp'],
+                    'status': order['status']
+                }
+            logger.info(f"Fetched {len(open_orders)} open orders at startup.")
+            if open_orders:
+                # Send initial orders to clients that might already be connected
+                update_message = {'type': 'orders_update', 'data': list(orders_cache.values())}
+                for ws in list(clients):
+                    try:
+                        await ws.send_json(update_message)
+                    except ConnectionResetError:
+                        logger.warning("Failed to send initial 'orders_update' to a client.")
+        except Exception as e:
+            logger.error(f"Failed to fetch open orders at startup: {e}")
 
         # User Data Stream 시작
         listen_key = await get_listen_key(binance_exchange)
