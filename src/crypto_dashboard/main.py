@@ -30,7 +30,7 @@ async def get_binance_balance():
         logger.warning("secrets.json file not found. Skipping balance fetch.")
         return {}
     except KeyError:
-        logger.warning("Could not find binance api_key or secret_key in secret.json. Skipping balance fetch.")
+        logger.warning("Could not find binance api_key or secret_key in secrets.json. Skipping balance fetch.")
         return {}
 
     if "YOUR_BINANCE" in api_key or "YOUR_BINANCE" in secret_key:
