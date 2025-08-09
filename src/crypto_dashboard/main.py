@@ -173,7 +173,8 @@ async def binance_data_fetcher(app):
         global balances_cache
         # Get assets from both holdings and open orders
         holding_assets = set(balances_cache.keys())
-        order_assets = {order['symbol'].replace('USDT', '') for order in orders_cache.values()}
+        # Clean up symbols from orders, removing both quote currency and slashes
+        order_assets = {order['symbol'].replace('USDT', '').replace('/', '') for order in orders_cache.values()}
         assets = list((holding_assets | order_assets) - {'USDT'})
 
         for ws in list(clients):
@@ -203,17 +204,23 @@ async def binance_data_fetcher(app):
                             symbol = ticker['s'].replace('USDT', '')
                             price = ticker['c']
                             
-                            if symbol in balances_cache:
-                                balances_cache[symbol]['price'] = price
-                                
-                            amount = balances_cache[symbol]['amount']
-                            value = float(price) * float(amount)
-                            update_message = {'symbol': symbol, 'amount': amount, 'price': price, 'value': value}
                             for ws in list(clients):
                                 try:
+                                    # 보유 자산인 경우, amount와 value를 포함하여 메시지 생성
+                                    if symbol in balances_cache:
+                                        balances_cache[symbol]['price'] = price
+                                        amount = balances_cache[symbol].get('amount', 0)
+                                        value = float(price) * float(amount)
+                                        update_message = {'symbol': symbol, 'amount': amount, 'price': price, 'value': value}
+                                    # 보유하지 않은 자산(주문만 있는 경우)은 가격 정보만 전송
+                                    else:
+                                        update_message = {'symbol': symbol, 'price': price}
+                                    
                                     await ws.send_json(update_message)
                                 except ConnectionResetError:
                                     logger.warning(f"Failed to send update to a client (connection reset).")
+                                except KeyError:
+                                    logger.error(f"KeyError for symbol {symbol} while preparing message. This shouldn't happen.")
 
             except websockets.ConnectionClosed:
                 logger.warning("Binance websocket connection closed. Reconnecting in 5 seconds...")
@@ -295,10 +302,8 @@ async def user_data_stream_fetcher(app, listen_key):
                             if is_positive and not is_existing:
                                 logger.info(f"New asset detected: {asset}, amount: {free_amount}")
                                 balances_cache[asset] = {'amount': free_amount, 'price': 0}
-                                if fetcher_task:
-                                    fetcher_task.cancel()
-                                fetcher_task = asyncio.create_task(binance_data_fetcher(app))
-                                logger.info(f"Restarting price fetcher for new asset: {asset}")
+                                # Simply update the balance. The fetcher already tracks all necessary symbols.
+                                # No need to restart the fetcher task.
 
                             elif not is_positive and is_existing:
                                 logger.info(f"Asset sold out: {asset}")
@@ -308,10 +313,7 @@ async def user_data_stream_fetcher(app, listen_key):
                                         await ws.send_json({'type': 'remove_holding', 'symbol': asset})
                                     except ConnectionResetError:
                                         logger.warning("Failed to send 'remove_holding' message to a client.")
-                                if fetcher_task:
-                                    fetcher_task.cancel()
-                                fetcher_task = asyncio.create_task(binance_data_fetcher(app))
-                                logger.info(f"Restarting price fetcher after selling asset: {asset}")
+                                # No need to restart the fetcher task.
                     
                     elif event_type == 'executionReport':
                         order_id = data['i']
@@ -384,11 +386,6 @@ async def on_startup(app):
             for asset, amount in initial_balances.items():
                 balances_cache[asset] = {'amount': amount}
 
-        # 가격 정보 fetcher 시작
-        fetcher_task = asyncio.create_task(binance_data_fetcher(app))
-        app['fetcher_task'] = fetcher_task
-        logger.info("Price fetcher background task started.")
-
         # 초기 미체결 주문 가져오기
         try:
             open_orders = await binance_exchange.fetch_open_orders()
@@ -416,6 +413,11 @@ async def on_startup(app):
                         logger.warning("Failed to send initial 'orders_update' to a client.")
         except Exception as e:
             logger.error(f"Failed to fetch open orders at startup: {e}")
+
+        # 가격 정보 fetcher 시작 (잔고와 주문 목록을 모두 가져온 후)
+        fetcher_task = asyncio.create_task(binance_data_fetcher(app))
+        app['fetcher_task'] = fetcher_task
+        logger.info("Price fetcher background task started.")
 
         # User Data Stream 시작
         listen_key = await get_listen_key(binance_exchange)

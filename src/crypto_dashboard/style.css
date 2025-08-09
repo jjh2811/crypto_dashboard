@@ -90,6 +90,41 @@ h1 {
     background-color: #e0e0e0;
 }
 
+.crypto-card {
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    user-select: none;
+}
+
+.crypto-card.selected {
+    background-color: #e8f0fe;
+}
+
+.crypto-card h2 {
+    margin-top: 0;
+    font-size: 1.5em;
+    color: #333;
+    text-align: center;
+}
+
+.crypto-card .amount, .crypto-card .price {
+    font-size: 1.1em;
+    color: #5f6368;
+    margin: 5px 0;
+}
+
+.crypto-card .value {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #28a745;
+    margin-top: 10px;
+}
+
 .crypto-card .side {
     font-weight: bold;
     text-transform: uppercase;
@@ -111,32 +146,4 @@ h1 {
 
 .crypto-card .price-diff {
     font-weight: bold;
-}
-
-.crypto-card {
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    padding: 20px;
-    text-align: center;
-}
-
-.crypto-card h2 {
-    margin-top: 0;
-    font-size: 1.5em;
-    color: #333;
-    text-align: center;
-}
-
-.crypto-card .amount, .crypto-card .price {
-    font-size: 1.1em;
-    color: #5f6368;
-    margin: 5px 0;
-}
-
-.crypto-card .value {
-    font-size: 1.5em;
-    font-weight: bold;
-    color: #28a745;
-    margin-top: 10px;
 }
