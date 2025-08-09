@@ -1,0 +1,22 @@
+[project]
+name = "crypto-dashboard"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Jinho",email = "jjh2811@naver.com"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "aiohttp>=3.12.15",
+    "ccxt>=4.4.99",
+    "websockets>=15.0.1",
+]
+
+[tool.poetry]
+packages = [{include = "crypto_dashboard", from = "src"}]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

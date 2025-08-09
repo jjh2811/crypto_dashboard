@@ -1,0 +1,634 @@
+2025-08-09 11:34:09,443 - INFO - Server started at http://localhost:8080
+2025-08-09 11:34:11,044 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:34:11,339 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:34:11,519 - INFO - Binance websocket connection established.
+2025-08-09 11:34:12,730 - INFO - 127.0.0.1 [09/Aug/2025:11:34:12 +0900] "GET / HTTP/1.1" 304 179 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+2025-08-09 11:34:12,798 - INFO - 127.0.0.1 [09/Aug/2025:11:34:12 +0900] "GET /style.css HTTP/1.1" 304 179 "http://localhost:8080/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+2025-08-09 11:34:12,847 - INFO - 127.0.0.1 [09/Aug/2025:11:34:12 +0900] "GET /script.js HTTP/1.1" 304 179 "http://localhost:8080/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+2025-08-09 11:34:12,963 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:34:35,649 - INFO - Stop signal received, shutting down.
+2025-08-09 11:34:36,123 - INFO - Cleaning up resources.
+2025-08-09 11:34:41,587 - INFO - Binance data fetcher task cancelled.
+2025-08-09 11:35:02,592 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:16,199 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:17,345 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:17,596 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:17,798 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:17,978 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:18,175 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:18,371 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:18,573 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:18,784 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:18,990 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:46,769 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:46,979 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:47,149 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:47,658 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:47,700 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:47,719 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:47,766 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:47,782 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:47,816 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:47,843 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:47,883 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:47,934 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:47,952 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:47,984 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,015 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,051 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,080 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,116 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,141 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,184 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,205 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,253 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,283 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,316 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,346 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,383 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,409 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,449 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,471 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,516 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,534 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,581 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,618 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,643 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,682 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,706 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,749 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,768 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,801 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,845 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,877 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,916 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,940 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:48,984 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:49,002 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:49,034 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:49,064 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:49,100 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:49,277 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:49,461 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:49,640 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:49,815 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:50,026 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:50,196 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:50,366 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:50,554 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:50,743 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:50,917 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:51,083 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:51,272 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:51,466 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:53,454 - INFO - Stop signal received, shutting down.
+2025-08-09 11:35:53,684 - INFO - Stop signal received, shutting down.
+2025-08-09 11:36:19,050 - INFO - Server started at http://localhost:8080
+2025-08-09 11:36:20,599 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:36:20,894 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:36:21,112 - INFO - Binance websocket connection established.
+2025-08-09 11:36:22,070 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:36:41,433 - INFO - Stop signal received, shutting down.
+2025-08-09 11:36:41,455 - INFO - Cleaning up resources.
+2025-08-09 11:36:46,461 - INFO - Binance data fetcher task cancelled.
+2025-08-09 11:36:57,986 - INFO - Stop signal received, shutting down.
+2025-08-09 11:37:04,783 - INFO - Stop signal received, shutting down.
+2025-08-09 11:37:05,036 - INFO - Stop signal received, shutting down.
+2025-08-09 11:37:05,237 - INFO - Stop signal received, shutting down.
+2025-08-09 11:37:05,417 - INFO - Stop signal received, shutting down.
+2025-08-09 11:37:05,603 - INFO - Stop signal received, shutting down.
+2025-08-09 11:37:05,784 - INFO - Stop signal received, shutting down.
+2025-08-09 11:37:05,976 - INFO - Stop signal received, shutting down.
+2025-08-09 11:37:06,183 - INFO - Stop signal received, shutting down.
+2025-08-09 11:37:06,461 - INFO - Stop signal received, shutting down.
+2025-08-09 11:37:56,539 - INFO - Server started at http://localhost:8080
+2025-08-09 11:37:58,067 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:37:58,362 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:37:58,576 - INFO - Binance websocket connection established.
+2025-08-09 11:37:59,595 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:38:24,191 - INFO - Stop signal received, shutting down.
+2025-08-09 11:38:24,455 - INFO - Cleaning up resources.
+2025-08-09 11:38:37,489 - INFO - Stop signal received, shutting down.
+2025-08-09 11:38:38,231 - INFO - Stop signal received, shutting down.
+2025-08-09 11:38:38,464 - INFO - Stop signal received, shutting down.
+2025-08-09 11:38:38,652 - INFO - Stop signal received, shutting down.
+2025-08-09 11:38:38,832 - INFO - Stop signal received, shutting down.
+2025-08-09 11:38:39,012 - INFO - Stop signal received, shutting down.
+2025-08-09 11:38:39,199 - INFO - Stop signal received, shutting down.
+2025-08-09 11:40:35,227 - INFO - Background task started.
+2025-08-09 11:40:36,815 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:40:37,112 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:40:37,292 - INFO - Binance websocket connection established.
+2025-08-09 11:40:38,333 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:40:49,106 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 11:40:49,107 - ERROR - Unhandled exception
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web.py", line 530, in run_app
+    loop.run_until_complete(main_task)
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 678, in run_until_complete
+    self.run_forever()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 645, in run_forever
+    self._run_once()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 1999, in _run_once
+    handle._run()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_runner.py", line 40, in _raise_graceful_exit
+    raise GracefulExit()
+aiohttp.web_runner.GracefulExit
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 510, in _handle_request
+    resp = await request_handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_app.py", line 569, in _handle
+    return await handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/src/crypto_dashboard/main.py", line 84, in handle_websocket
+    async for msg in ws:
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_ws.py", line 620, in __anext__
+    msg = await self.receive()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_ws.py", line 545, in receive
+    msg = await self._reader.read()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "aiohttp/_websocket/reader_c.py", line 118, in read
+  File "aiohttp/_websocket/reader_c.py", line 115, in aiohttp._websocket.reader_c.WebSocketDataQueue.read
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 602, in start
+    resp, reset = await task
+                  ^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 539, in _handle_request
+    self._handler_waiter.set_result(None)
+asyncio.exceptions.InvalidStateError: invalid state
+2025-08-09 11:40:51,719 - INFO - Background task started.
+2025-08-09 11:40:53,373 - INFO - Stopping background task...
+2025-08-09 11:40:53,625 - INFO - Binance data fetcher task cancelled.
+2025-08-09 11:40:53,669 - INFO - Binance data fetcher task finished.
+2025-08-09 11:40:53,669 - INFO - Background task stopped.
+2025-08-09 11:40:53,670 - INFO - Server shutdown complete.
+2025-08-09 11:40:56,920 - INFO - Background task started.
+2025-08-09 11:40:58,449 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:40:58,745 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:40:58,826 - INFO - 127.0.0.1 [09/Aug/2025:11:40:58 +0900] "UNKNOWN / HTTP/1.0" 400 224 "-" "-"
+2025-08-09 11:40:58,857 - INFO - 127.0.0.1 [09/Aug/2025:11:40:58 +0900] "UNKNOWN / HTTP/1.0" 400 227 "-" "-"
+2025-08-09 11:40:58,888 - INFO - 127.0.0.1 [09/Aug/2025:11:40:58 +0900] "UNKNOWN / HTTP/1.0" 400 224 "-" "-"
+2025-08-09 11:40:58,963 - INFO - Binance websocket connection established.
+2025-08-09 11:40:59,099 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:41:00,732 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 11:41:00,732 - INFO - 127.0.0.1 [09/Aug/2025:11:40:59 +0900] "GET /ws HTTP/1.1" 101 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+2025-08-09 11:41:06,069 - INFO - Stopping background task...
+2025-08-09 11:41:11,185 - INFO - Binance data fetcher task cancelled.
+2025-08-09 11:41:11,185 - INFO - Binance data fetcher task finished.
+2025-08-09 11:41:11,185 - INFO - Background task stopped.
+2025-08-09 11:41:11,185 - INFO - Server shutdown complete.
+2025-08-09 11:41:13,951 - INFO - Background task started.
+2025-08-09 11:41:15,558 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:41:15,853 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:41:16,072 - INFO - Binance websocket connection established.
+2025-08-09 11:41:18,096 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:41:19,765 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 11:41:19,766 - INFO - 127.0.0.1 [09/Aug/2025:11:41:18 +0900] "GET /ws HTTP/1.1" 101 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+2025-08-09 11:41:21,974 - INFO - Stopping background task...
+2025-08-09 11:41:28,555 - INFO - Binance data fetcher task cancelled.
+2025-08-09 11:41:28,555 - INFO - Binance data fetcher task finished.
+2025-08-09 11:41:28,555 - INFO - Background task stopped.
+2025-08-09 11:41:28,556 - INFO - Server shutdown complete.
+2025-08-09 11:44:18,686 - INFO - Background task started.
+2025-08-09 11:44:20,234 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:44:20,529 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:44:20,753 - INFO - Binance websocket connection established.
+2025-08-09 11:44:21,927 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:45:33,772 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 11:45:33,773 - ERROR - Unhandled exception
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web.py", line 530, in run_app
+    loop.run_until_complete(main_task)
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 678, in run_until_complete
+    self.run_forever()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 645, in run_forever
+    self._run_once()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 1999, in _run_once
+    handle._run()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_runner.py", line 40, in _raise_graceful_exit
+    raise GracefulExit()
+aiohttp.web_runner.GracefulExit
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 510, in _handle_request
+    resp = await request_handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_app.py", line 569, in _handle
+    return await handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/src/crypto_dashboard/main.py", line 84, in handle_websocket
+    async for msg in ws:
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_ws.py", line 620, in __anext__
+    msg = await self.receive()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_ws.py", line 545, in receive
+    msg = await self._reader.read()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "aiohttp/_websocket/reader_c.py", line 118, in read
+  File "aiohttp/_websocket/reader_c.py", line 115, in aiohttp._websocket.reader_c.WebSocketDataQueue.read
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 602, in start
+    resp, reset = await task
+                  ^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 539, in _handle_request
+    self._handler_waiter.set_result(None)
+asyncio.exceptions.InvalidStateError: invalid state
+2025-08-09 11:49:19,815 - INFO - Background task started.
+2025-08-09 11:49:21,340 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:49:21,635 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:49:21,849 - INFO - Binance websocket connection established.
+2025-08-09 11:49:24,344 - INFO - Stopping background task...
+2025-08-09 11:49:29,873 - INFO - Binance data fetcher task cancelled.
+2025-08-09 11:49:29,873 - INFO - Binance data fetcher task finished.
+2025-08-09 11:49:29,873 - INFO - Background task stopped.
+2025-08-09 11:49:29,873 - INFO - Server shutdown complete.
+2025-08-09 11:50:24,928 - INFO - Background task started.
+2025-08-09 11:50:26,478 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:50:26,773 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:50:26,989 - INFO - Binance websocket connection established.
+2025-08-09 11:50:27,057 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:51:20,039 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 11:51:20,039 - ERROR - Unhandled exception
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web.py", line 530, in run_app
+    loop.run_until_complete(main_task)
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 678, in run_until_complete
+    self.run_forever()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 645, in run_forever
+    self._run_once()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 1999, in _run_once
+    handle._run()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_runner.py", line 40, in _raise_graceful_exit
+    raise GracefulExit()
+aiohttp.web_runner.GracefulExit
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 510, in _handle_request
+    resp = await request_handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_app.py", line 569, in _handle
+    return await handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/src/crypto_dashboard/main.py", line 84, in handle_websocket
+    async for msg in ws:
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_ws.py", line 620, in __anext__
+    msg = await self.receive()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_ws.py", line 545, in receive
+    msg = await self._reader.read()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "aiohttp/_websocket/reader_c.py", line 118, in read
+  File "aiohttp/_websocket/reader_c.py", line 115, in aiohttp._websocket.reader_c.WebSocketDataQueue.read
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 602, in start
+    resp, reset = await task
+                  ^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 539, in _handle_request
+    self._handler_waiter.set_result(None)
+asyncio.exceptions.InvalidStateError: invalid state
+2025-08-09 11:51:48,098 - INFO - Background task started.
+2025-08-09 11:51:49,648 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:51:49,944 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:51:50,128 - INFO - Binance websocket connection established.
+2025-08-09 11:51:52,405 - INFO - Stopping background task...
+2025-08-09 11:51:57,449 - INFO - Binance data fetcher task cancelled.
+2025-08-09 11:51:57,449 - INFO - Binance data fetcher task finished.
+2025-08-09 11:51:57,449 - INFO - Background task stopped.
+2025-08-09 11:51:57,450 - INFO - Server shutdown complete.
+2025-08-09 11:53:05,111 - INFO - Background task started.
+2025-08-09 11:53:06,660 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:53:06,955 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:53:07,173 - INFO - Binance websocket connection established.
+2025-08-09 11:53:07,396 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:53:15,439 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 11:53:15,440 - ERROR - Unhandled exception
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web.py", line 530, in run_app
+    loop.run_until_complete(main_task)
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 678, in run_until_complete
+    self.run_forever()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 645, in run_forever
+    self._run_once()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 1999, in _run_once
+    handle._run()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_runner.py", line 40, in _raise_graceful_exit
+    raise GracefulExit()
+aiohttp.web_runner.GracefulExit
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 510, in _handle_request
+    resp = await request_handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_app.py", line 569, in _handle
+    return await handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/src/crypto_dashboard/main.py", line 84, in handle_websocket
+    async for msg in ws:
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_ws.py", line 620, in __anext__
+    msg = await self.receive()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_ws.py", line 545, in receive
+    msg = await self._reader.read()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "aiohttp/_websocket/reader_c.py", line 118, in read
+  File "aiohttp/_websocket/reader_c.py", line 115, in aiohttp._websocket.reader_c.WebSocketDataQueue.read
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 602, in start
+    resp, reset = await task
+                  ^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 539, in _handle_request
+    self._handler_waiter.set_result(None)
+asyncio.exceptions.InvalidStateError: invalid state
+2025-08-09 11:53:21,526 - INFO - Background task started.
+2025-08-09 11:53:23,072 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:53:23,368 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:53:23,578 - INFO - Binance websocket connection established.
+2025-08-09 11:53:43,116 - INFO - Stopping background task...
+2025-08-09 11:53:50,102 - INFO - Binance data fetcher task cancelled.
+2025-08-09 11:53:50,102 - INFO - Binance data fetcher task finished.
+2025-08-09 11:53:50,102 - INFO - Background task stopped.
+2025-08-09 11:53:50,103 - INFO - Server shutdown complete.
+2025-08-09 11:55:08,097 - INFO - Background task started.
+2025-08-09 11:55:09,639 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:55:09,934 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:55:10,146 - INFO - Binance websocket connection established.
+2025-08-09 11:55:11,918 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:55:28,603 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 11:55:28,603 - ERROR - Unhandled exception
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web.py", line 530, in run_app
+    loop.run_until_complete(main_task)
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 678, in run_until_complete
+    self.run_forever()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 645, in run_forever
+    self._run_once()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/base_events.py", line 1999, in _run_once
+    handle._run()
+  File "/home/ubuntu/.local/share/uv/python/cpython-3.12.11-linux-aarch64-gnu/lib/python3.12/asyncio/events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_runner.py", line 40, in _raise_graceful_exit
+    raise GracefulExit()
+aiohttp.web_runner.GracefulExit
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 510, in _handle_request
+    resp = await request_handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_app.py", line 569, in _handle
+    return await handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/src/crypto_dashboard/main.py", line 84, in handle_websocket
+    async for msg in ws:
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_ws.py", line 620, in __anext__
+    msg = await self.receive()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_ws.py", line 545, in receive
+    msg = await self._reader.read()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "aiohttp/_websocket/reader_c.py", line 118, in read
+  File "aiohttp/_websocket/reader_c.py", line 115, in aiohttp._websocket.reader_c.WebSocketDataQueue.read
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 602, in start
+    resp, reset = await task
+                  ^^^^^^^^^^
+  File "/home/ubuntu/projects/crypto_dashboard/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 539, in _handle_request
+    self._handler_waiter.set_result(None)
+asyncio.exceptions.InvalidStateError: invalid state
+2025-08-09 11:55:32,292 - INFO - Background task started.
+2025-08-09 11:55:33,855 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:55:34,150 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:55:34,374 - INFO - Binance websocket connection established.
+2025-08-09 11:55:41,465 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:55:43,425 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 11:55:43,426 - INFO - 127.0.0.1 [09/Aug/2025:11:55:41 +0900] "GET /ws HTTP/1.1" 101 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+2025-08-09 11:55:46,025 - INFO - Closing 0 client connections...
+2025-08-09 11:55:46,026 - INFO - All client connections closed.
+2025-08-09 11:55:46,026 - INFO - Stopping background task...
+2025-08-09 11:55:53,523 - INFO - Binance data fetcher task cancelled.
+2025-08-09 11:55:53,523 - INFO - Binance data fetcher task finished.
+2025-08-09 11:55:53,523 - INFO - Background task stopped.
+2025-08-09 11:55:53,524 - INFO - Server shutdown complete.
+2025-08-09 11:55:56,015 - INFO - Background task started.
+2025-08-09 11:55:57,558 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:55:57,853 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:55:58,076 - INFO - Binance websocket connection established.
+2025-08-09 11:56:00,859 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:56:05,973 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 11:56:05,973 - INFO - 127.0.0.1 [09/Aug/2025:11:56:00 +0900] "GET /ws HTTP/1.1" 101 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+2025-08-09 11:56:11,511 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:57:47,708 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 11:57:55,488 - INFO - Background task started.
+2025-08-09 11:57:57,193 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:57:57,489 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:57:57,698 - INFO - Binance websocket connection established.
+2025-08-09 11:57:59,920 - INFO - Shutdown signal sent to all handlers.
+2025-08-09 11:58:00,121 - INFO - Stopping background task...
+2025-08-09 11:58:06,916 - INFO - Binance data fetcher task cancelled.
+2025-08-09 11:58:06,917 - INFO - Binance data fetcher task finished.
+2025-08-09 11:58:06,917 - INFO - Background task stopped.
+2025-08-09 11:58:06,917 - INFO - Server shutdown complete.
+2025-08-09 11:58:08,832 - INFO - Background task started.
+2025-08-09 11:58:10,363 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:58:10,660 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:58:10,884 - INFO - Binance websocket connection established.
+2025-08-09 11:58:12,397 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:58:27,612 - INFO - Background task started.
+2025-08-09 11:58:29,208 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 11:58:29,505 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 11:58:29,539 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 11:58:29,722 - INFO - Binance websocket connection established.
+2025-08-09 11:58:34,087 - ERROR - Error in websocket handler: WebSocket connection is closed.
+2025-08-09 11:58:34,087 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 11:58:34,087 - INFO - 127.0.0.1 [09/Aug/2025:11:58:29 +0900] "GET /ws HTTP/1.1" 101 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+2025-08-09 11:58:38,400 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 12:02:10,327 - INFO - Server starting up...
+2025-08-09 12:02:10,328 - INFO - Background task started.
+2025-08-09 12:02:12,000 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 12:02:12,296 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 12:02:12,479 - INFO - Binance websocket connection established.
+2025-08-09 12:02:32,566 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 12:02:41,473 - INFO - Shutdown signal received. Closing client connections...
+2025-08-09 12:02:41,474 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 12:02:41,474 - INFO - 127.0.0.1 [09/Aug/2025:12:02:32 +0900] "GET /ws HTTP/1.1" 101 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+2025-08-09 12:02:41,474 - INFO - All 0 client connections closed.
+2025-08-09 12:02:41,474 - INFO - Cleaning up background task...
+2025-08-09 12:02:48,834 - INFO - Binance data fetcher task cancelled.
+2025-08-09 12:02:48,834 - INFO - Binance data fetcher task finished.
+2025-08-09 12:02:48,834 - INFO - Background task stopped.
+2025-08-09 12:02:48,835 - INFO - Server shutdown complete.
+2025-08-09 12:03:23,852 - INFO - Server starting up...
+2025-08-09 12:03:23,852 - INFO - Background task started.
+2025-08-09 12:03:25,418 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 12:03:25,713 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 12:03:25,921 - INFO - Binance websocket connection established.
+2025-08-09 12:03:31,042 - INFO - Shutdown signal received. Closing client connections...
+2025-08-09 12:03:31,042 - INFO - All 0 client connections closed.
+2025-08-09 12:03:31,042 - INFO - Cleaning up background task...
+2025-08-09 12:03:40,077 - INFO - Binance data fetcher task cancelled.
+2025-08-09 12:03:40,077 - INFO - Binance data fetcher task finished.
+2025-08-09 12:03:40,077 - INFO - Background task stopped.
+2025-08-09 12:03:40,077 - INFO - Server shutdown complete.
+2025-08-09 12:08:53,598 - INFO - Server starting up...
+2025-08-09 12:08:53,598 - INFO - Background task started.
+2025-08-09 12:08:55,227 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 12:08:55,523 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 12:08:55,709 - INFO - Binance websocket connection established.
+2025-08-09 12:09:06,594 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 12:09:15,237 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 12:09:15,238 - INFO - 127.0.0.1 [09/Aug/2025:12:09:06 +0900] "GET /ws HTTP/1.1" 101 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+2025-08-09 12:10:57,503 - INFO - Shutdown signal received. Closing client connections...
+2025-08-09 12:10:57,503 - INFO - All 0 client connections closed.
+2025-08-09 12:10:57,503 - INFO - Cleaning up background task...
+2025-08-09 12:11:05,983 - INFO - Binance data fetcher task cancelled.
+2025-08-09 12:11:05,984 - INFO - Binance data fetcher task finished.
+2025-08-09 12:11:05,984 - INFO - Background task stopped.
+2025-08-09 12:11:05,984 - INFO - Server shutdown complete.
+2025-08-09 12:11:08,500 - INFO - Server starting up...
+2025-08-09 12:11:08,500 - INFO - Background task started.
+2025-08-09 12:11:10,071 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 12:11:10,367 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 12:11:10,582 - INFO - Binance websocket connection established.
+2025-08-09 12:11:14,486 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 12:11:20,349 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 12:11:26,975 - INFO - Client connected: 127.0.0.1. Total clients: 1
+2025-08-09 12:11:29,759 - INFO - Shutdown signal received. Closing client connections...
+2025-08-09 12:11:29,760 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 12:11:29,760 - INFO - All 0 client connections closed.
+2025-08-09 12:11:29,760 - INFO - Cleaning up background task...
+2025-08-09 12:11:34,901 - INFO - Binance data fetcher task cancelled.
+2025-08-09 12:11:34,901 - INFO - Binance data fetcher task finished.
+2025-08-09 12:11:34,901 - INFO - Background task stopped.
+2025-08-09 12:11:34,902 - INFO - Server shutdown complete.
+2025-08-09 12:12:15,784 - INFO - Server starting up...
+2025-08-09 12:12:15,784 - INFO - Background task started.
+2025-08-09 12:12:17,411 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 12:12:17,707 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 12:12:17,926 - INFO - Binance websocket connection established.
+2025-08-09 12:12:20,477 - INFO - Client connected: 127.0.0.1 - "GET /ws HTTP/1.1" 101 - "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+2025-08-09 12:12:20,477 - INFO - Total clients: 1
+2025-08-09 12:12:27,063 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 12:12:33,941 - INFO - Client connected: 127.0.0.1 - "GET /ws HTTP/1.1" 101 - "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+2025-08-09 12:12:33,941 - INFO - Total clients: 1
+2025-08-09 12:12:38,646 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 12:12:43,495 - INFO - Shutdown signal received. Closing client connections...
+2025-08-09 12:12:43,495 - INFO - All 0 client connections closed.
+2025-08-09 12:12:43,496 - INFO - Cleaning up background task...
+2025-08-09 12:12:52,133 - INFO - Binance data fetcher task cancelled.
+2025-08-09 12:12:52,133 - INFO - Binance data fetcher task finished.
+2025-08-09 12:12:52,134 - INFO - Background task stopped.
+2025-08-09 12:12:52,134 - INFO - Server shutdown complete.
+2025-08-09 12:12:53,854 - INFO - Server starting up...
+2025-08-09 12:12:53,854 - INFO - Background task started.
+2025-08-09 12:12:55,460 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 12:12:55,756 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 12:12:55,941 - INFO - Binance websocket connection established.
+2025-08-09 12:12:56,926 - INFO - Client connected: 127.0.0.1 - "GET /ws HTTP/1.1" 101 - "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+2025-08-09 12:12:56,926 - INFO - Total clients: 1
+2025-08-09 12:13:21,809 - INFO - Shutdown signal received. Closing client connections...
+2025-08-09 12:13:21,809 - INFO - Client disconnected: 127.0.0.1. Total clients: 0
+2025-08-09 12:13:21,810 - INFO - All 0 client connections closed.
+2025-08-09 12:13:21,810 - INFO - Cleaning up background task...
+2025-08-09 12:13:29,164 - INFO - Binance data fetcher task cancelled.
+2025-08-09 12:13:29,164 - INFO - Binance data fetcher task finished.
+2025-08-09 12:13:29,164 - INFO - Background task stopped.
+2025-08-09 12:13:29,164 - INFO - Server shutdown complete.
+2025-08-09 12:20:46,793 - INFO - Server starting up...
+2025-08-09 12:20:46,793 - INFO - Background task started.
+2025-08-09 12:20:48,333 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 12:20:48,629 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 12:20:48,809 - INFO - Binance websocket connection established.
+2025-08-09 12:20:51,571 - INFO - Shutdown signal received. Closing client connections...
+2025-08-09 12:20:51,571 - INFO - All 0 client connections closed.
+2025-08-09 12:20:51,571 - INFO - Cleaning up background task...
+2025-08-09 12:21:00,307 - INFO - Binance data fetcher task cancelled.
+2025-08-09 12:21:00,307 - INFO - Binance data fetcher task finished.
+2025-08-09 12:21:00,307 - INFO - Background task stopped.
+2025-08-09 12:21:00,307 - INFO - Server shutdown complete.
+2025-08-09 12:21:03,755 - INFO - Server starting up...
+2025-08-09 12:21:03,755 - INFO - Background task started.
+2025-08-09 12:21:04,338 - INFO - Shutdown signal received. Closing client connections...
+2025-08-09 12:21:04,338 - INFO - All 0 client connections closed.
+2025-08-09 12:21:04,338 - INFO - Cleaning up background task...
+2025-08-09 12:21:04,610 - INFO - Binance data fetcher task cancelled.
+2025-08-09 12:21:04,613 - INFO - Binance data fetcher task finished.
+2025-08-09 12:21:04,614 - INFO - Background task stopped.
+2025-08-09 12:21:04,614 - INFO - Server shutdown complete.
+2025-08-09 12:21:24,934 - INFO - Server starting up...
+2025-08-09 12:21:24,935 - INFO - Background task started.
+2025-08-09 12:21:26,589 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 12:21:26,885 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 12:21:27,109 - INFO - Binance websocket connection established.
+2025-08-09 12:24:06,308 - INFO - Shutdown signal received. Closing client connections...
+2025-08-09 12:24:06,309 - INFO - All 0 client connections closed.
+2025-08-09 12:24:06,309 - INFO - Cleaning up background task...
+2025-08-09 12:24:15,135 - INFO - Binance data fetcher task cancelled.
+2025-08-09 12:24:15,136 - INFO - Binance data fetcher task finished.
+2025-08-09 12:24:15,136 - INFO - Background task stopped.
+2025-08-09 12:24:15,136 - INFO - Server shutdown complete.
+2025-08-09 12:24:23,913 - INFO - Server starting up...
+2025-08-09 12:24:23,913 - INFO - Background task started.
+2025-08-09 12:24:25,445 - INFO - Shutdown signal received. Closing client connections...
+2025-08-09 12:24:25,446 - INFO - All 0 client connections closed.
+2025-08-09 12:24:25,446 - INFO - Cleaning up background task...
+2025-08-09 12:24:25,698 - INFO - Binance data fetcher task cancelled.
+2025-08-09 12:24:25,741 - INFO - Binance data fetcher task finished.
+2025-08-09 12:24:25,742 - INFO - Background task stopped.
+2025-08-09 12:24:25,742 - INFO - Server shutdown complete.
+2025-08-09 12:24:56,671 - INFO - Server starting up...
+2025-08-09 12:24:56,671 - INFO - Background task started.
+2025-08-09 12:24:58,208 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 12:24:58,504 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 12:24:58,729 - INFO - Binance websocket connection established.
+2025-08-09 12:26:25,620 - INFO - Server starting up...
+2025-08-09 12:26:25,621 - INFO - Background task started.
+2025-08-09 12:26:27,158 - INFO - Fetched balances: {'BNB': 0.02562143, 'USDT': 16.41158609, 'USDC': 4800.0}
+2025-08-09 12:26:27,453 - INFO - Connecting to Binance websocket: wss://stream.binance.com:9443/stream?streams=bnbusdt@ticker/usdcusdt@ticker
+2025-08-09 12:26:27,630 - INFO - Binance websocket connection established.
+2025-08-09 12:26:38,065 - INFO - Shutdown signal received. Closing client connections...
+2025-08-09 12:26:38,065 - INFO - All 0 client connections closed.
+2025-08-09 12:26:38,065 - INFO - Cleaning up background task...
+2025-08-09 12:26:47,147 - INFO - Binance data fetcher task cancelled.
+2025-08-09 12:26:47,147 - INFO - Binance data fetcher task finished.
+2025-08-09 12:26:47,147 - INFO - Background task stopped.
+2025-08-09 12:26:47,148 - INFO - Server shutdown complete.
