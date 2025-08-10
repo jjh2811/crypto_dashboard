@@ -88,13 +88,13 @@ async def handle_websocket(request):
                 price = data.get('price', 0)
                 amount = data.get('amount', 0)
                 value = float(price) * float(amount)
-                await ws.send_json({'symbol': symbol, 'amount': amount, 'price': price, 'value': value})
+                await ws.send_json({'symbol': symbol, 'amount': amount, 'price': price, 'value': value, 'quote_currency': 'USDT'})
         
         # Send initial open orders data
         if orders_cache:
             update_message = {'type': 'orders_update', 'data': list(orders_cache.values())}
             try:
-                await ws.send_json(update_message)
+                await ws.send_json(update_message) # Note: orders_update data should also contain quote_currency
             except ConnectionResetError:
                 logger.warning("Failed to send initial 'orders_update' to a newly connected client.")
 
@@ -201,10 +201,10 @@ async def binance_data_fetcher(app):
                             balances_cache[symbol]['price'] = price
                             amount = balances_cache[symbol].get('amount', 0)
                             value = float(price) * float(amount)
-                            update_message = {'symbol': symbol, 'price': price, 'amount': amount, 'value': value}
+                            update_message = {'symbol': symbol, 'price': price, 'amount': amount, 'value': value, 'quote_currency': 'USDT'}
                         # 미체결 주문에만 있는 자산인 경우 가격 정보만 전송
                         else:
-                            update_message = {'symbol': symbol, 'price': price}
+                            update_message = {'symbol': symbol, 'price': price, 'quote_currency': 'USDT'}
 
                         for ws in list(clients):
                             try:
@@ -361,6 +361,7 @@ async def user_data_stream_fetcher(app, listen_key):
                                 'price': price,
                                 'amount': amount,
                                 'value': price * amount,
+                                'quote_currency': symbol[len(data['s'].replace(data['S'], '')):], # Heuristic to get quote
                                 'timestamp': data['T'],
                                 'status': status
                             }
@@ -434,6 +435,7 @@ async def on_startup(app):
                     'price': price,
                     'amount': amount,
                     'value': price * amount,
+                    'quote_currency': order['symbol'].split('/')[1] if order['symbol'] and '/' in order['symbol'] else 'USDT',
                     'timestamp': order['timestamp'],
                     'status': order['status']
                 }
