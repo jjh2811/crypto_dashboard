@@ -305,7 +305,6 @@ async def keepalive_listen_key(exchange, listen_key):
             async with aiohttp.ClientSession() as session:
                 async with session.put(listen_url, headers=headers, params={'listenKey': listen_key}, timeout=aiohttp.ClientTimeout(total=5)) as response:
                     response.raise_for_status()
-                    logger.info("Listen key kept alive.")
         except Exception as e:
             logger.error(f"Failed to keep listen key alive: {e}")
             # If keepalive fails, we might need to get a new key. For now, we just log and break.
