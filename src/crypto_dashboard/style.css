@@ -185,3 +185,17 @@ h1 {
     font-size: 16px;
     box-sizing: border-box;
 }
+
+
+.crypto-card .locked {
+    font-size: 1.0em;
+    color: #ff7f50; /* Coral color for locked amount */
+    margin: 5px 0;
+}
+
+.crypto-card .total-amount {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #5f6368;
+    margin: 5px 0;
+}

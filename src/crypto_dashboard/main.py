@@ -48,13 +48,22 @@ async def get_binance_balance():
 
     try:
         balance = await exchange.fetch_balance()
-        positive_balances = {
-            asset: amount
-            for asset, amount in balance['total'].items()
-            if isinstance(amount, (int, float)) and amount > 0
+        # 'total' 딕셔너리에서 total 값이 0보다 큰 자산만 필터링합니다.
+        free_balances = balance.get('free', {})
+        used_balances = balance.get('used', {})
+        total_balances = balance.get('total', {})
+
+        detailed_balances = {
+            asset: {
+                'free': free_balances.get(asset, 0),
+                'used': used_balances.get(asset, 0),
+                'total': total_amount
+            }
+            for asset, total_amount in total_balances.items()
+            if isinstance(total_amount, (int, float)) and total_amount > 0
         }
-        logger.info(f"Fetched balances: {positive_balances}")
-        return positive_balances
+        logger.info(f"Fetched detailed balances: {detailed_balances}")
+        return detailed_balances
     except Exception as e:
         logger.error(f"An error occurred while fetching balance: {e}")
         return None
@@ -63,6 +72,36 @@ async def get_binance_balance():
 
 
 clients = set()
+async def broadcast_message(message):
+    """모든 연결된 클라이언트에게 메시지를 전송합니다."""
+    for ws in list(clients):
+        try:
+            await ws.send_json(message)
+        except ConnectionResetError:
+            # 클라이언트 연결이 이미 끊어진 경우 무시
+            logger.warning(f"Failed to send message to a disconnected client.")
+
+async def broadcast_orders_update():
+    """모든 클라이언트에게 현재 주문 목록을 전송합니다."""
+    update_message = {'type': 'orders_update', 'data': list(orders_cache.values())}
+    await broadcast_message(update_message)
+def create_balance_update_message(symbol, balance_data):
+    """잔고 정보로부터 클라이언트에게 보낼 업데이트 메시지를 생성합니다."""
+    price = balance_data.get('price', 0)
+    free_amount = balance_data.get('free', 0)
+    locked_amount = balance_data.get('locked', 0)
+    total_amount = free_amount + locked_amount
+    value = float(price) * total_amount
+    return {
+        'symbol': symbol,
+        'price': price,
+        'free': free_amount,
+        'locked': locked_amount,
+        'value': value,
+        'quote_currency': 'USDT'
+    }
+
+
 balances_cache = {}
 orders_cache = {} # To cache open orders
 binance_exchange = None # Binance exchange instance
@@ -85,10 +124,8 @@ async def handle_websocket(request):
         # Send initial holdings data
         if balances_cache:
             for symbol, data in balances_cache.items():
-                price = data.get('price', 0)
-                amount = data.get('amount', 0)
-                value = float(price) * float(amount)
-                await ws.send_json({'symbol': symbol, 'amount': amount, 'price': price, 'value': value, 'quote_currency': 'USDT'})
+                update_message = create_balance_update_message(symbol, data)
+                await ws.send_json(update_message)
         
         # Send initial open orders data
         if orders_cache:
@@ -124,12 +161,7 @@ async def handle_websocket(request):
                                 logger.error(f"Failed to cancel order {order['id']}: {e}")
                         
                         # Send updated list to all clients
-                        update_message = {'type': 'orders_update', 'data': list(orders_cache.values())}
-                        for client_ws in list(clients):
-                            try:
-                                await client_ws.send_json(update_message)
-                            except ConnectionResetError:
-                                logger.warning("Failed to send 'orders_update' after cancellation.")
+                        await broadcast_orders_update()
                     
                     elif msg_type == 'cancel_all_orders':
                         logger.info("Received request to cancel all orders.")
@@ -147,12 +179,7 @@ async def handle_websocket(request):
                         
                         # Clear cache and send update
                         orders_cache.clear()
-                        update_message = {'type': 'orders_update', 'data': []}
-                        for client_ws in list(clients):
-                            try:
-                                await client_ws.send_json(update_message)
-                            except ConnectionResetError:
-                                logger.warning("Failed to send 'orders_update' after cancelling all.")
+                        await broadcast_orders_update()
 
                 except json.JSONDecodeError:
                     logger.warning(f"Received non-JSON message: {msg.data}")
@@ -202,18 +229,12 @@ async def binance_data_fetcher(app):
                         # 실제로 보유한 자산인 경우 amount, value 포함
                         if symbol in balances_cache:
                             balances_cache[symbol]['price'] = price
-                            amount = balances_cache[symbol].get('amount', 0)
-                            value = float(price) * float(amount)
-                            update_message = {'symbol': symbol, 'price': price, 'amount': amount, 'value': value, 'quote_currency': 'USDT'}
+                            update_message = create_balance_update_message(symbol, balances_cache[symbol])
                         # 미체결 주문에만 있는 자산인 경우 가격 정보만 전송
                         else:
                             update_message = {'symbol': symbol, 'price': price, 'quote_currency': 'USDT'}
 
-                        for ws in list(clients):
-                            try:
-                                await ws.send_json(update_message)
-                            except ConnectionResetError:
-                                pass
+                        await broadcast_message(update_message)
                     elif 'result' in data:
                         logger.info(f"Subscription response received: {data}")
 
@@ -327,45 +348,39 @@ async def user_data_stream_fetcher(app, listen_key):
                     event_type = data.get('e')
 
                     if event_type == 'outboundAccountPosition':
-                        for balance in data['B']:
-                            asset = balance['a']
-                            free_amount = float(balance['f'])
-                            
+                        for balance_update in data['B']:
+                            asset = balance_update['a']
+                            free_amount = float(balance_update['f'])
+                            locked_amount = float(balance_update['l'])
+                            total_amount = free_amount + locked_amount
+
                             is_existing = asset in balances_cache
-                            is_positive = free_amount > 0
+                            # 부동소수점 오차를 고려하여 매우 작은 값보다 큰 경우에만 양수로 간주
+                            is_positive_total = total_amount > 1e-8
 
-                            if asset == 'USDT':
-                                if 'USDT' in balances_cache:
-                                    balances_cache['USDT']['amount'] = free_amount
-                                    logger.info(f"USDT balance updated: {free_amount}")
-                                    # 클라이언트에 USDT 잔고 업데이트 전송
-                                    price = balances_cache['USDT'].get('price', 1.0)
-                                    value = free_amount * price
-                                    update_message = {'symbol': 'USDT', 'price': price, 'amount': free_amount, 'value': value, 'quote_currency': 'USDT'}
-                                    for ws in list(clients):
-                                        try:
-                                            await ws.send_json(update_message)
-                                        except ConnectionResetError:
-                                            pass # 이미 연결이 끊긴 클라이언트
-                            elif is_positive and not is_existing:
-                                logger.info(f"New asset detected: {asset}, amount: {free_amount}")
-                                price = 0 # 초기 가격은 나중에 가격 스트림에서 받음
-                                balances_cache[asset] = {'amount': free_amount, 'price': price}
-                                await update_subscriptions_if_needed(app)
+                            if is_positive_total:
+                                if not is_existing:
+                                    logger.info(f"New asset detected: {asset}, free: {free_amount}, locked: {locked_amount}")
+                                    balances_cache[asset] = {'price': 0}
+                                
+                                balances_cache[asset]['free'] = free_amount
+                                balances_cache[asset]['locked'] = locked_amount
+                                logger.info(f"Balance for {asset} updated. Free: {free_amount}, Locked: {locked_amount}")
 
-                            elif not is_positive and is_existing:
-                                logger.info(f"Asset sold out: {asset}")
+                                if asset == 'USDT' and balances_cache[asset].get('price', 0) == 0:
+                                    balances_cache[asset]['price'] = 1.0
+
+                                update_message = create_balance_update_message(asset, balances_cache[asset])
+                                await broadcast_message(update_message)
+                                
+                                if not is_existing:
+                                    await update_subscriptions_if_needed(app)
+
+                            elif not is_positive_total and is_existing:
+                                logger.info(f"Asset sold out or zeroed: {asset}")
                                 del balances_cache[asset]
-                                for ws in list(clients):
-                                    try:
-                                        await ws.send_json({'type': 'remove_holding', 'symbol': asset})
-                                    except ConnectionResetError:
-                                        logger.warning("Failed to send 'remove_holding' message to a client.")
+                                await broadcast_message({'type': 'remove_holding', 'symbol': asset})
                                 await update_subscriptions_if_needed(app)
-                            elif is_positive and is_existing:
-                                # 기존에 보유하고 있던 자산의 수량 변경 (예: 추가 매수)
-                                balances_cache[asset]['amount'] = free_amount
-                                logger.info(f"Asset amount updated: {asset}, new amount: {free_amount}")
                     
                     elif event_type == 'executionReport':
                         order_id = data['i']
@@ -393,12 +408,7 @@ async def user_data_stream_fetcher(app, listen_key):
                                 logger.info(f"Order {order_id} removed from cache.")
                         
                         # UI 즉시 업데이트
-                        update_message = {'type': 'orders_update', 'data': list(orders_cache.values())}
-                        for ws in list(clients):
-                            try:
-                                await ws.send_json(update_message)
-                            except ConnectionResetError:
-                                logger.warning("Failed to send 'orders_update' to a client.")
+                        await broadcast_orders_update()
                         
                         # 구독 상태 업데이트
                         await update_subscriptions_if_needed(app)
@@ -440,9 +450,13 @@ async def on_startup(app):
         # 초기 잔고 가져오기
         initial_balances = await get_binance_balance()
         if initial_balances:
-            for asset, amount in initial_balances.items():
+            for asset, details in initial_balances.items():
                 price = 1.0 if asset == 'USDT' else 0
-                balances_cache[asset] = {'amount': amount, 'price': price}
+                balances_cache[asset] = {
+                    'free': details.get('free', 0),
+                    'locked': details.get('used', 0), # API 응답에서 'used'가 locked임
+                    'price': price
+                }
 
         # 초기 미체결 주문 가져오기
         try:
@@ -464,12 +478,7 @@ async def on_startup(app):
             logger.info(f"Fetched {len(open_orders)} open orders at startup.")
             if open_orders:
                 # Send initial orders to clients that might already be connected
-                update_message = {'type': 'orders_update', 'data': list(orders_cache.values())}
-                for ws in list(clients):
-                    try:
-                        await ws.send_json(update_message)
-                    except ConnectionResetError:
-                        logger.warning("Failed to send initial 'orders_update' to a client.")
+                await broadcast_orders_update()
         except Exception as e:
             logger.error(f"Failed to fetch open orders at startup: {e}")
 

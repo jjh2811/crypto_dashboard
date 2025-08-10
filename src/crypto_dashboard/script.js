@@ -57,9 +57,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 cachedOrders = data.data;
                 updateOrdersList(cachedOrders); // Full redraw only on order changes
             } else {
-                if (data.value !== undefined) {
+                // 'free' 또는 'amount' 키가 존재하면 보유 자산 정보로 간주하고 카드 업데이트
+                if (data.free !== undefined || data.amount !== undefined) {
                     updateCryptoCard(data);
                 } else {
+                    // 그렇지 않으면 가격 정보로 간주
                     currentPrices[data.symbol] = parseFloat(data.price);
                 }
                 updatePriceDiffs(); // Update only price diffs on price changes
@@ -73,7 +75,7 @@ document.addEventListener("DOMContentLoaded", () => {
     websocket.onerror = (error) => console.error("WebSocket error:", error);
 
     function updateCryptoCard(data) {
-        const { symbol, price, amount, value } = data;
+        const { symbol, price } = data;
         currentPrices[symbol] = parseFloat(price);
         let card = document.getElementById(symbol);
 
@@ -83,13 +85,8 @@ document.addEventListener("DOMContentLoaded", () => {
             card.className = "crypto-card";
             cryptoContainer.appendChild(card);
         }
-
-        card.innerHTML = `
-            <h2>${symbol}</h2>
-            <p class="amount">Amount: ${amount}</p>
-            <p class="price">Price: $${parseFloat(price).toFixed(2)}</p>
-            <p class="value" data-value="${value}">Value: $${parseFloat(value).toFixed(2)}</p>
-        `;
+        
+        card.innerHTML = createCryptoCardHTML(data);
         updateTotalValue();
     }
 
@@ -138,29 +135,9 @@ document.addEventListener("DOMContentLoaded", () => {
             orderCard.className = "crypto-card";
             orderCard.dataset.orderId = order.id; // Set dataset for identification
             const baseSymbol = order.symbol.replace('USDT', '').replace('/', '');
-            const sideClass = order.side.toLowerCase() === 'buy' ? 'side-buy' : 'side-sell';
-            const orderDate = new Date(order.timestamp).toLocaleString();
-            
-            let priceDiffHtml = '<p class="price-diff">-</p>'; // Default value
             const currentPrice = currentPrices[baseSymbol];
-            if (currentPrice) {
-                const priceDiff = ((order.price - currentPrice) / currentPrice) * 100;
-                const diffClass = priceDiff >= 0 ? 'side-buy' : 'side-sell';
-                priceDiffHtml = `<p class="price-diff ${diffClass}">Diff: ${priceDiff.toFixed(2)}%</p>`;
-            }
-
-            orderCard.innerHTML = `
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                    <h2 style="margin: 0;">${baseSymbol}</h2>
-                    <input type="checkbox" class="order-checkbox" data-order-id="${order.id}" data-symbol="${order.symbol}">
-                </div>
-                <p class="side ${sideClass}">${order.side}</p>
-                <p class="price">Price: ${parseFloat(order.price).toFixed(2)}</p>
-                ${priceDiffHtml}
-                <p class="amount">Amount: ${order.amount}</p>
-                <p class="value">Value: $${parseFloat(order.value).toFixed(2)}</p>
-                <p class="date">${orderDate}</p>
-            `;
+            
+            orderCard.innerHTML = createOrderCardHTML(order, currentPrice);
             ordersContainer.appendChild(orderCard);
         });
 
@@ -174,6 +151,54 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
         });
+    }
+
+    function createCryptoCardHTML(data) {
+        const symbol = data.symbol || 'Unknown';
+        // 모든 숫자 값을 파싱하기 전에 유효성을 확인하고, 아니면 0으로 설정합니다.
+        const price = Number.isFinite(parseFloat(data.price)) ? parseFloat(data.price) : 0;
+        const free = Number.isFinite(parseFloat(data.free)) ? parseFloat(data.free) : 0;
+        const locked = Number.isFinite(parseFloat(data.locked)) ? parseFloat(data.locked) : 0;
+        const value = Number.isFinite(parseFloat(data.value)) ? parseFloat(data.value) : 0;
+        
+        const totalAmount = free + locked;
+        // toFixed(8)로 정밀도를 유지한 뒤 parseFloat으로 불필요한 0을 제거합니다.
+        const lockedAmountHtml = locked > 1e-8 ? `<p class="locked">Locked: ${parseFloat(locked.toFixed(8))}</p>` : '';
+
+        return `
+            <h2>${symbol}</h2>
+            <p class="amount">Free: ${parseFloat(free.toFixed(8))}</p>
+            ${lockedAmountHtml}
+            <p class="total-amount">Total: ${parseFloat(totalAmount.toFixed(8))}</p>
+            <p class="price">Price: $${price.toFixed(2)}</p>
+            <p class="value" data-value="${value.toFixed(2)}">Value: $${value.toFixed(2)}</p>
+        `;
+    }
+
+    function createOrderCardHTML(order, currentPrice) {
+        const baseSymbol = order.symbol.replace('USDT', '').replace('/', '');
+        const sideClass = order.side.toLowerCase() === 'buy' ? 'side-buy' : 'side-sell';
+        const orderDate = new Date(order.timestamp).toLocaleString();
+        
+        let priceDiffHtml = '<p class="price-diff">-</p>';
+        if (currentPrice) {
+            const priceDiff = ((order.price - currentPrice) / currentPrice) * 100;
+            const diffClass = priceDiff >= 0 ? 'side-buy' : 'side-sell';
+            priceDiffHtml = `<p class="price-diff ${diffClass}">Diff: ${priceDiff.toFixed(2)}%</p>`;
+        }
+
+        return `
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <h2 style="margin: 0;">${baseSymbol}</h2>
+                <input type="checkbox" class="order-checkbox" data-order-id="${order.id}" data-symbol="${order.symbol}">
+            </div>
+            <p class="side ${sideClass}">${order.side}</p>
+            <p class="price">Price: ${parseFloat(order.price).toFixed(2)}</p>
+            ${priceDiffHtml}
+            <p class="amount">Amount: ${order.amount}</p>
+            <p class="value">Value: $${parseFloat(order.value).toFixed(2)}</p>
+            <p class="date">${orderDate}</p>
+        `;
     }
 });
 
