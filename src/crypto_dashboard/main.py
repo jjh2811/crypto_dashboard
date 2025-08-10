@@ -181,13 +181,16 @@ async def binance_data_fetcher(app):
 
                 initial_assets = app.get('tracked_assets', set())
                 if initial_assets:
-                    streams = [f"{asset.lower()}usdt@miniTicker" for asset in initial_assets]
-                    await websocket.send(json.dumps({
-                        "method": "SUBSCRIBE",
-                        "params": streams,
-                        "id": 1
-                    }))
-                    logger.info(f"Initial subscription sent for: {streams}")
+                    # USDT는 가격 구독에서 제외
+                    assets_to_subscribe = [asset for asset in initial_assets if asset != 'USDT']
+                    streams = [f"{asset.lower()}usdt@miniTicker" for asset in assets_to_subscribe]
+                    if streams:
+                        await websocket.send(json.dumps({
+                            "method": "SUBSCRIBE",
+                            "params": streams,
+                            "id": 1
+                        }))
+                        logger.info(f"Initial subscription sent for: {streams}")
 
                 async for message in websocket:
                     data = json.loads(message)
@@ -262,15 +265,16 @@ async def update_subscriptions_if_needed(app):
 
         holding_assets = set(balances_cache.keys())
         order_assets = {order['symbol'].replace('USDT', '').replace('/', '') for order in orders_cache.values()}
-        required_assets = (holding_assets | order_assets) - {'USDT'}
+        required_assets = (holding_assets | order_assets)
         
         current_assets = app.get('tracked_assets', set())
         
         to_add = required_assets - current_assets
         to_remove = current_assets - required_assets
 
-        await send_subscription_message("SUBSCRIBE", list(to_add))
-        await send_subscription_message("UNSUBSCRIBE", list(to_remove))
+        # USDT는 가격 구독에서 제외
+        await send_subscription_message("SUBSCRIBE", [asset for asset in to_add if asset != 'USDT'])
+        await send_subscription_message("UNSUBSCRIBE", [asset for asset in to_remove if asset != 'USDT'])
 
         app['tracked_assets'] = required_assets
         if to_add or to_remove:
@@ -333,7 +337,8 @@ async def user_data_stream_fetcher(app, listen_key):
 
                             if is_positive and not is_existing:
                                 logger.info(f"New asset detected: {asset}, amount: {free_amount}")
-                                balances_cache[asset] = {'amount': free_amount, 'price': 0}
+                                price = 1.0 if asset == 'USDT' else 0
+                                balances_cache[asset] = {'amount': free_amount, 'price': price}
                                 await update_subscriptions_if_needed(app)
 
                             elif not is_positive and is_existing:
@@ -420,7 +425,8 @@ async def on_startup(app):
         initial_balances = await get_binance_balance()
         if initial_balances:
             for asset, amount in initial_balances.items():
-                balances_cache[asset] = {'amount': amount, 'price': 0}
+                price = 1.0 if asset == 'USDT' else 0
+                balances_cache[asset] = {'amount': amount, 'price': price}
 
         # 초기 미체결 주문 가져오기
         try:
@@ -454,7 +460,7 @@ async def on_startup(app):
         # 추적할 초기 자산 목록 설정
         holding_assets = set(balances_cache.keys())
         order_assets = {o['symbol'].replace('USDT', '').replace('/', '') for o in orders_cache.values()}
-        app['tracked_assets'] = (holding_assets | order_assets) - {'USDT'}
+        app['tracked_assets'] = (holding_assets | order_assets)
         app['price_ws_ready'] = asyncio.Event()
         app['subscription_lock'] = asyncio.Lock()
         
