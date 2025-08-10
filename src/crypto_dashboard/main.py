@@ -334,9 +334,22 @@ async def user_data_stream_fetcher(app, listen_key):
                             is_existing = asset in balances_cache
                             is_positive = free_amount > 0
 
-                            if is_positive and not is_existing:
+                            if asset == 'USDT':
+                                if 'USDT' in balances_cache:
+                                    balances_cache['USDT']['amount'] = free_amount
+                                    logger.info(f"USDT balance updated: {free_amount}")
+                                    # 클라이언트에 USDT 잔고 업데이트 전송
+                                    price = balances_cache['USDT'].get('price', 1.0)
+                                    value = free_amount * price
+                                    update_message = {'symbol': 'USDT', 'price': price, 'amount': free_amount, 'value': value, 'quote_currency': 'USDT'}
+                                    for ws in list(clients):
+                                        try:
+                                            await ws.send_json(update_message)
+                                        except ConnectionResetError:
+                                            pass # 이미 연결이 끊긴 클라이언트
+                            elif is_positive and not is_existing:
                                 logger.info(f"New asset detected: {asset}, amount: {free_amount}")
-                                price = 1.0 if asset == 'USDT' else 0
+                                price = 0 # 초기 가격은 나중에 가격 스트림에서 받음
                                 balances_cache[asset] = {'amount': free_amount, 'price': price}
                                 await update_subscriptions_if_needed(app)
 
@@ -349,6 +362,10 @@ async def user_data_stream_fetcher(app, listen_key):
                                     except ConnectionResetError:
                                         logger.warning("Failed to send 'remove_holding' message to a client.")
                                 await update_subscriptions_if_needed(app)
+                            elif is_positive and is_existing:
+                                # 기존에 보유하고 있던 자산의 수량 변경 (예: 추가 매수)
+                                balances_cache[asset]['amount'] = free_amount
+                                logger.info(f"Asset amount updated: {asset}, new amount: {free_amount}")
                     
                     elif event_type == 'executionReport':
                         order_id = data['i']
