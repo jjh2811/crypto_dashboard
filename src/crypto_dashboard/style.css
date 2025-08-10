@@ -4,6 +4,7 @@ body {
     color: #333;
     margin: 0;
     padding: 20px;
+    padding-bottom: 80px; /* Add padding to prevent overlap with command bar */
 }
 
 h1 {
@@ -146,4 +147,41 @@ h1 {
 
 .crypto-card .price-diff {
     font-weight: bold;
+}
+
+.crypto-card .price-diff.positive {
+    color: #28a745;
+}
+
+.crypto-card .price-diff.negative {
+    color: #dc3545;
+}
+
+.crypto-card .price-diff.neutral {
+    color: #6c757d;
+}
+
+.crypto-card .order-checkbox {
+    float: left;
+}
+
+/* Command Bar Styles */
+#command-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: #ffffff;
+    padding: 10px 20px;
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+    box-sizing: border-box;
+}
+
+#command-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 16px;
+    box-sizing: border-box;
 }
