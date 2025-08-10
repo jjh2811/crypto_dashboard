@@ -1,4 +1,5 @@
 from ccxt.async_support import binance
+from decimal import Decimal
 import asyncio
 import os
 import websockets
@@ -87,17 +88,17 @@ async def broadcast_orders_update():
     await broadcast_message(update_message)
 def create_balance_update_message(symbol, balance_data):
     """잔고 정보로부터 클라이언트에게 보낼 업데이트 메시지를 생성합니다."""
-    price = balance_data.get('price', 0)
-    free_amount = balance_data.get('free', 0)
-    locked_amount = balance_data.get('locked', 0)
+    price = Decimal(str(balance_data.get('price', '0')))
+    free_amount = balance_data.get('free', Decimal('0'))
+    locked_amount = balance_data.get('locked', Decimal('0'))
     total_amount = free_amount + locked_amount
-    value = float(price) * total_amount
+    value = price * total_amount
     return {
         'symbol': symbol,
-        'price': price,
-        'free': free_amount,
-        'locked': locked_amount,
-        'value': value,
+        'price': float(price),
+        'free': float(free_amount),
+        'locked': float(locked_amount),
+        'value': float(value),
         'quote_currency': 'USDT'
     }
 
@@ -228,11 +229,11 @@ async def binance_data_fetcher(app):
 
                         # 실제로 보유한 자산인 경우 amount, value 포함
                         if symbol in balances_cache:
-                            balances_cache[symbol]['price'] = price
+                            balances_cache[symbol]['price'] = Decimal(price)
                             update_message = create_balance_update_message(symbol, balances_cache[symbol])
                         # 미체결 주문에만 있는 자산인 경우 가격 정보만 전송
                         else:
-                            update_message = {'symbol': symbol, 'price': price, 'quote_currency': 'USDT'}
+                            update_message = {'symbol': symbol, 'price': float(Decimal(price)), 'quote_currency': 'USDT'}
 
                         await broadcast_message(update_message)
                     elif 'result' in data:
@@ -350,28 +351,32 @@ async def user_data_stream_fetcher(app, listen_key):
                     if event_type == 'outboundAccountPosition':
                         for balance_update in data['B']:
                             asset = balance_update['a']
-                            free_amount = float(balance_update['f'])
-                            locked_amount = float(balance_update['l'])
+                            free_amount = Decimal(balance_update['f'])
+                            locked_amount = Decimal(balance_update['l'])
                             total_amount = free_amount + locked_amount
 
                             is_existing = asset in balances_cache
-                            # 부동소수점 오차를 고려하여 매우 작은 값보다 큰 경우에만 양수로 간주
-                            is_positive_total = total_amount > 1e-8
+                            is_positive_total = total_amount > Decimal('0')
 
                             if is_positive_total:
+                                old_free = balances_cache.get(asset, {}).get('free', Decimal('0'))
+                                old_locked = balances_cache.get(asset, {}).get('locked', Decimal('0'))
+                                has_changed = (free_amount != old_free) or (locked_amount != old_locked)
+
                                 if not is_existing:
                                     logger.info(f"New asset detected: {asset}, free: {free_amount}, locked: {locked_amount}")
                                     balances_cache[asset] = {'price': 0}
                                 
                                 balances_cache[asset]['free'] = free_amount
                                 balances_cache[asset]['locked'] = locked_amount
-                                logger.info(f"Balance for {asset} updated. Free: {free_amount}, Locked: {locked_amount}")
+                                
+                                if has_changed:
+                                    logger.info(f"Balance for {asset} updated. Free: {free_amount}, Locked: {locked_amount}")
+                                    update_message = create_balance_update_message(asset, balances_cache[asset])
+                                    await broadcast_message(update_message)
 
                                 if asset == 'USDT' and balances_cache[asset].get('price', 0) == 0:
                                     balances_cache[asset]['price'] = 1.0
-
-                                update_message = create_balance_update_message(asset, balances_cache[asset])
-                                await broadcast_message(update_message)
                                 
                                 if not is_existing:
                                     await update_subscriptions_if_needed(app)
@@ -388,15 +393,15 @@ async def user_data_stream_fetcher(app, listen_key):
                         status = data['X']
                         
                         if status in ['NEW', 'PARTIALLY_FILLED']:
-                            price = float(data['p'])
-                            amount = float(data['q'])
+                            price = Decimal(data['p'])
+                            amount = Decimal(data['q'])
                             orders_cache[order_id] = {
                                 'id': order_id,
                                 'symbol': symbol,
                                 'side': data['S'],
-                                'price': price,
-                                'amount': amount,
-                                'value': price * amount,
+                                'price': float(price),
+                                'amount': float(amount),
+                                'value': float(price * amount),
                                 'quote_currency': symbol[len(data['s'].replace(data['S'], '')):], # Heuristic to get quote
                                 'timestamp': data['T'],
                                 'status': status
@@ -451,10 +456,10 @@ async def on_startup(app):
         initial_balances = await get_binance_balance()
         if initial_balances:
             for asset, details in initial_balances.items():
-                price = 1.0 if asset == 'USDT' else 0
+                price = Decimal('1.0') if asset == 'USDT' else Decimal('0')
                 balances_cache[asset] = {
-                    'free': details.get('free', 0),
-                    'locked': details.get('used', 0), # API 응답에서 'used'가 locked임
+                    'free': Decimal(str(details.get('free', 0))),
+                    'locked': Decimal(str(details.get('used', 0))), # API 응답에서 'used'가 locked임
                     'price': price
                 }
 
@@ -462,15 +467,15 @@ async def on_startup(app):
         try:
             open_orders = await binance_exchange.fetch_open_orders()
             for order in open_orders:
-                price = float(order.get('price') or 0)
-                amount = float(order.get('amount') or 0)
+                price = Decimal(str(order.get('price') or 0))
+                amount = Decimal(str(order.get('amount') or 0))
                 orders_cache[order['id']] = {
                     'id': order['id'],
                     'symbol': order['symbol'],
                     'side': order['side'],
-                    'price': price,
-                    'amount': amount,
-                    'value': price * amount,
+                    'price': float(price),
+                    'amount': float(amount),
+                    'value': float(price * amount),
                     'quote_currency': order['symbol'].split('/')[1] if order['symbol'] and '/' in order['symbol'] else 'USDT',
                     'timestamp': order['timestamp'],
                     'status': order['status']
