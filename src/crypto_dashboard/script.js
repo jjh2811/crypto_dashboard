@@ -63,6 +63,16 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    const commandBar = document.getElementById('command-bar');
+
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => {
+            const viewport = window.visualViewport;
+            const keyboardHeight = window.innerHeight - viewport.height;
+            commandBar.style.bottom = `${keyboardHeight}px`;
+        });
+    }
+
     websocket.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
