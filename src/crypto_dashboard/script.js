@@ -165,6 +165,18 @@ document.addEventListener("DOMContentLoaded", () => {
         const totalAmount = free + locked;
         // toFixed(8)로 정밀도를 유지한 뒤 parseFloat으로 불필요한 0을 제거합니다.
         const lockedAmountHtml = locked > 1e-8 ? `<p class="locked">Locked: ${parseFloat(locked.toFixed(8))}</p>` : '';
+        
+        let avgBuyPriceHtml = '<p class="avg-buy-price">-</p>';
+        if (data.avg_buy_price) {
+            const avg_buy_price = parseFloat(data.avg_buy_price);
+            const profitPercent = ((price - avg_buy_price) / avg_buy_price) * 100;
+            const profitClass = profitPercent >= 0 ? 'profit-positive' : 'profit-negative';
+            avgBuyPriceHtml = `
+                <p class="avg-buy-price">Avg: $${avg_buy_price.toFixed(2)}</p>
+                <p class="profit ${profitClass}">${profitPercent.toFixed(2)}%</p>
+            `;
+        }
+
 
         return `
             <h2>${symbol}</h2>
@@ -172,6 +184,7 @@ document.addEventListener("DOMContentLoaded", () => {
             ${lockedAmountHtml}
             <p class="total-amount">Total: ${parseFloat(totalAmount.toFixed(8))}</p>
             <p class="price">Price: $${price.toFixed(2)}</p>
+            ${avgBuyPriceHtml}
             <p class="value" data-value="${value.toFixed(2)}">Value: $${value.toFixed(2)}</p>
         `;
     }

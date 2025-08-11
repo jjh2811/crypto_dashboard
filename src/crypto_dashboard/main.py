@@ -17,59 +17,6 @@ stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(log_formatter)
 logger.addHandler(stream_handler)
 
-async def get_binance_balance():
-    """
-    바이낸스 계정의 잔고 정보를 가져옵니다.
-    """
-    try:
-        secrets_path = os.path.join(os.path.dirname(__file__), 'secrets.json')
-        with open(secrets_path) as f:
-            secrets = json.load(f)
-        api_key = secrets['exchanges']['binance']['api_key']
-        secret_key = secrets['exchanges']['binance']['secret_key']
-    except FileNotFoundError:
-        logger.warning("secrets.json file not found. Skipping balance fetch.")
-        return {}
-    except KeyError:
-        logger.warning("Could not find binance api_key or secret_key in secrets.json. Skipping balance fetch.")
-        return {}
-
-    if "YOUR_BINANCE" in api_key or "YOUR_BINANCE" in secret_key:
-        logger.warning("Please replace placeholder keys in secrets.json with your actual Binance API keys.")
-        return {}
-
-    exchange = binance({
-        'apiKey': api_key,
-        'secret': secret_key,
-        'enableRateLimit': True,
-        'options': {
-            'defaultType': 'spot',
-        },
-    })
-
-    try:
-        balance = await exchange.fetch_balance()
-        # 'total' 딕셔너리에서 total 값이 0보다 큰 자산만 필터링합니다.
-        free_balances = balance.get('free', {})
-        used_balances = balance.get('used', {})
-        total_balances = balance.get('total', {})
-
-        detailed_balances = {
-            asset: {
-                'free': free_balances.get(asset, 0),
-                'used': used_balances.get(asset, 0),
-                'total': total_amount
-            }
-            for asset, total_amount in total_balances.items()
-            if isinstance(total_amount, (int, float)) and total_amount > 0
-        }
-        logger.info(f"Fetched detailed balances: {detailed_balances}")
-        return detailed_balances
-    except Exception as e:
-        logger.error(f"An error occurred while fetching balance: {e}")
-        return None
-    finally:
-        await exchange.close()
 
 
 clients = set()
@@ -93,20 +40,21 @@ def create_balance_update_message(symbol, balance_data):
     locked_amount = balance_data.get('locked', Decimal('0'))
     total_amount = free_amount + locked_amount
     value = price * total_amount
+    avg_buy_price = balance_data.get('avg_buy_price') # 평단가 정보 추가
+
     return {
         'symbol': symbol,
         'price': float(price),
         'free': float(free_amount),
         'locked': float(locked_amount),
         'value': float(value),
+        'avg_buy_price': float(avg_buy_price) if avg_buy_price is not None else None,
         'quote_currency': 'USDT'
     }
 
 
 balances_cache = {}
 orders_cache = {} # To cache open orders
-binance_exchange = None # Binance exchange instance
-
 async def handle_websocket(request):
     ws = web.WebSocketResponse()
     await ws.prepare(request)
@@ -174,7 +122,7 @@ async def handle_websocket(request):
                         
                         for order in all_orders:
                              try:
-                                await request.app['binance_exchange'].cancel_order(order['id'], order['symbol'])
+                                await binance_exchange.cancel_order(order['id'], order['symbol'])
                                 logger.info(f"Successfully sent cancel request for order {order['id']}")
                              except Exception as e:
                                 logger.error(f"Failed to cancel order {order['id']}: {e}")
@@ -373,6 +321,10 @@ async def user_data_stream_fetcher(app, listen_key):
                                 
                                 if has_changed:
                                     logger.info(f"Balance for {asset} updated. Free: {free_amount}, Locked: {locked_amount}")
+                                    # 평단가 재계산 또는 기존 값 유지
+                                    if 'avg_buy_price' not in balances_cache[asset]:
+                                         balances_cache[asset]['avg_buy_price'] = await calculate_average_buy_price(app['binance_exchange'], asset, total_amount)
+                                    
                                     update_message = create_balance_update_message(asset, balances_cache[asset])
                                     await broadcast_message(update_message)
 
@@ -415,6 +367,28 @@ async def user_data_stream_fetcher(app, listen_key):
                         
                         # UI 즉시 업데이트
                         await broadcast_orders_update()
+
+                        # 주문 체결 시 평단가 재계산 (최적화)
+                        if status == 'FILLED':
+                            asset = symbol.replace('USDT', '')
+                            if asset in balances_cache and data['S'] == 'BUY': # 매수 체결 시에만 평단가 변경
+                                old_total_amount = balances_cache[asset].get('total_amount', Decimal('0'))
+                                old_avg_price = balances_cache[asset].get('avg_buy_price', Decimal('0'))
+                                
+                                filled_amount = Decimal(data['q'])
+                                filled_price = Decimal(data['p'])
+
+                                if old_total_amount > 0 and old_avg_price > 0:
+                                    old_cost = old_total_amount * old_avg_price
+                                    new_cost = filled_amount * filled_price
+                                    new_total_amount = old_total_amount + filled_amount
+                                    new_avg_price = (old_cost + new_cost) / new_total_amount
+                                else: # 기존 보유량이 없던 경우, 첫 매수가 평단가
+                                     new_avg_price = filled_price
+                                
+                                balances_cache[asset]['avg_buy_price'] = new_avg_price
+                                logger.info(f"Average price for {asset} updated to {new_avg_price} by new trade.")
+                                # 잔고 정보는 outboundAccountPosition 이벤트에서 업데이트되므로 여기서는 평단가만 갱신
                         
                         # 구독 상태 업데이트
                         await update_subscriptions_if_needed(app)
@@ -431,7 +405,6 @@ async def on_startup(app):
     """
     aiohttp 앱 시작 시 백그라운드 태스크를 생성합니다.
     """
-    # global binance_exchange # 전역 변수 사용을 지양하고 app context에 저장
     app['tracked_assets'] = set()
     logger.info("Server starting up...")
     
@@ -443,6 +416,10 @@ async def on_startup(app):
         api_key = secrets['exchanges']['binance']['api_key']
         secret_key = secrets['exchanges']['binance']['secret_key']
         
+        if "YOUR_BINANCE" in api_key or "YOUR_BINANCE" in secret_key:
+            logger.warning("Please replace placeholder keys in secrets.json with your actual Binance API keys.")
+            return
+
         app['binance_exchange'] = binance({
             'apiKey': api_key,
             'secret': secret_key,
@@ -452,61 +429,63 @@ async def on_startup(app):
                 'warnOnFetchOpenOrdersWithoutSymbol': False,
             },
         })
-
-        # 초기 잔고 가져오기
-        initial_balances = await get_binance_balance()
-        if initial_balances:
-            for asset, details in initial_balances.items():
-                price = Decimal('1.0') if asset == 'USDT' else Decimal('0')
-                balances_cache[asset] = {
-                    'free': Decimal(str(details.get('free', 0))),
-                    'locked': Decimal(str(details.get('used', 0))), # API 응답에서 'used'가 locked임
-                    'price': price
-                }
-
-        # 초기 미체결 주문 가져오기
-        try:
-            open_orders = await app['binance_exchange'].fetch_open_orders()
-            for order in open_orders:
-                price = Decimal(str(order.get('price') or 0))
-                amount = Decimal(str(order.get('amount') or 0))
-                orders_cache[order['id']] = {
-                    'id': order['id'],
-                    'symbol': order['symbol'],
-                    'side': order['side'],
-                    'price': float(price),
-                    'amount': float(amount),
-                    'value': float(price * amount),
-                    'quote_currency': order['symbol'].split('/')[1] if order['symbol'] and '/' in order['symbol'] else 'USDT',
-                    'timestamp': order['timestamp'],
-                    'status': order['status']
-                }
-            logger.info(f"Fetched {len(open_orders)} open orders at startup.")
-            if open_orders:
-                # Send initial orders to clients that might already be connected
-                await broadcast_orders_update()
-        except Exception as e:
-            logger.error(f"Failed to fetch open orders at startup: {e}")
-
-        # 추적할 초기 자산 목록 설정
-        holding_assets = set(balances_cache.keys())
-        order_assets = {o['symbol'].replace('USDT', '').replace('/', '') for o in orders_cache.values()}
-        app['tracked_assets'] = (holding_assets | order_assets)
-        app['price_ws_ready'] = asyncio.Event()
-        app['subscription_lock'] = asyncio.Lock()
-        
-        # 가격 정보 fetcher 시작
-        app['fetcher_task'] = asyncio.create_task(binance_data_fetcher(app))
-    
-        # User Data Stream 시작
-        listen_key = await get_listen_key(app['binance_exchange'])
-        if listen_key:
-            app['user_data_stream_task'] = asyncio.create_task(user_data_stream_fetcher(app, listen_key))
-            app['keepalive_task'] = asyncio.create_task(keepalive_listen_key(app['binance_exchange'], listen_key))
-            logger.info("User data stream and keepalive tasks started.")
-
     except (FileNotFoundError, KeyError) as e:
         logger.error(f"Could not initialize Binance exchange due to missing secrets: {e}")
+        return
+
+    # 초기 데이터 로드 및 캐싱
+    try:
+        balance = await app['binance_exchange'].fetch_balance()
+        open_orders = await app['binance_exchange'].fetch_open_orders()
+
+        # 미체결 주문 캐싱
+        for order in open_orders:
+            price = Decimal(str(order.get('price') or 0))
+            amount = Decimal(str(order.get('amount') or 0))
+            orders_cache[order['id']] = {
+                'id': order['id'], 'symbol': order['symbol'], 'side': order['side'],
+                'price': float(price), 'amount': float(amount), 'value': float(price * amount),
+                'quote_currency': order['symbol'].split('/')[1] if order['symbol'] and '/' in order['symbol'] else 'USDT',
+                'timestamp': order['timestamp'], 'status': order['status']
+            }
+        logger.info(f"Fetched {len(open_orders)} open orders at startup.")
+
+        # 잔고 캐싱 및 평단가 계산
+        total_balances = {
+            asset: total for asset, total in balance.get('total', {}).items() if total > 0
+        }
+        for asset, total_amount in total_balances.items():
+            avg_buy_price = await calculate_average_buy_price(app['binance_exchange'], asset, total_amount)
+            free_amount = Decimal(str(balance.get('free', {}).get(asset, 0)))
+            locked_amount = Decimal(str(balance.get('used', {}).get(asset, 0)))
+            balances_cache[asset] = {
+                'free': free_amount,
+                'locked': locked_amount,
+                'total_amount': free_amount + locked_amount, # 총 수량 캐싱
+                'price': Decimal('1.0') if asset == 'USDT' else Decimal('0'),
+                'avg_buy_price': avg_buy_price
+            }
+            logger.info(f"Asset: {asset}, Avg Buy Price: {avg_buy_price if avg_buy_price is not None else 'N/A'}")
+
+    except Exception as e:
+        logger.error(f"Failed to fetch initial data from Binance: {e}")
+        await app['binance_exchange'].close()
+        return
+
+    # 백그라운드 작업 시작
+    holding_assets = set(balances_cache.keys())
+    order_assets = {o['symbol'].replace('USDT', '').replace('/', '') for o in orders_cache.values()}
+    app['tracked_assets'] = holding_assets | order_assets
+    app['price_ws_ready'] = asyncio.Event()
+    app['subscription_lock'] = asyncio.Lock()
+    
+    app['fetcher_task'] = asyncio.create_task(binance_data_fetcher(app))
+
+    listen_key = await get_listen_key(app['binance_exchange'])
+    if listen_key:
+        app['user_data_stream_task'] = asyncio.create_task(user_data_stream_fetcher(app, listen_key))
+        app['keepalive_task'] = asyncio.create_task(keepalive_listen_key(app['binance_exchange'], listen_key))
+        logger.info("User data stream and keepalive tasks started.")
 
 async def on_shutdown(app):
     """
@@ -522,30 +501,66 @@ async def on_cleanup(app):
     모든 정리가 끝난 후 마지막으로 실행됩니다. 백그라운드 태스크를 취소합니다.
     """
     logger.info("Cleaning up background tasks...")
-    if 'fetcher_task' in app:
-        app['fetcher_task'].cancel()
-    if 'user_data_stream_task' in app:
-        app['user_data_stream_task'].cancel()
-    if 'keepalive_task' in app:
-        app['keepalive_task'].cancel()
-    
-    tasks = [t for t in [
-        app.get('fetcher_task'),
-        app.get('user_data_stream_task'),
-        app.get('keepalive_task')
-    ] if t]
-
-    for task in tasks:
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass # 작업 취소는 예상된 동작
+    tasks_to_cancel = [
+        'fetcher_task', 'user_data_stream_task', 'keepalive_task'
+    ]
+    for task_name in tasks_to_cancel:
+        if task_name in app and not app[task_name].done():
+            app[task_name].cancel()
+            try:
+                await app[task_name]
+            except asyncio.CancelledError:
+                pass  # 작업 취소는 예상된 동작
 
     if 'binance_exchange' in app:
         await app['binance_exchange'].close()
         logger.info("Binance exchange connection closed.")
 
     logger.info("All background tasks stopped.")
+
+async def calculate_average_buy_price(exchange, asset, current_amount):
+    """
+    제공된 알고리즘을 사용하여 자산의 평균 매수 가격을 계산합니다.
+    """
+    if not exchange:
+        logger.error("Exchange object is not initialized. Cannot calculate average buy price.")
+        return None
+        
+    if asset == 'USDT' or current_amount <= 0:
+        return None
+
+    symbol = f"{asset}/USDT"
+    try:
+        trade_history = await exchange.fetch_closed_orders(symbol)
+        if not trade_history:
+            return None
+
+        amount_to_trace = Decimal(str(current_amount))
+        cost = Decimal('0')
+        amount_traced = Decimal('0')
+        
+        # 거래 내역을 최신순으로 순회
+        for trade in sorted(trade_history, key=lambda x: x['timestamp'], reverse=True):
+            if amount_to_trace <= Decimal('0'):
+                break
+
+            filled = Decimal(str(trade['filled']))
+            price = Decimal(str(trade['price']))
+
+            if trade['side'] == 'buy':
+                buy_amount = min(amount_to_trace, filled)
+                cost += buy_amount * price
+                amount_traced += buy_amount
+                amount_to_trace -= buy_amount
+        
+        if amount_traced > Decimal('0'):
+            # 모든 계산은 Decimal로 하고, 최종 반환값만 유지
+            return cost / amount_traced
+        return None
+
+    except Exception as e:
+        logger.error(f"Error calculating average buy price for {asset}: {e}")
+        return None
 
 def init_app():
     """
