@@ -142,6 +142,7 @@ async def handle_websocket(request):
                 try:
                     data = json.loads(msg.data)
                     msg_type = data.get('type')
+                    binance_exchange = request.app.get('binance_exchange')
 
                     if not binance_exchange:
                         logger.error("Exchange is not initialized. Cannot process order cancellation.")
@@ -157,7 +158,7 @@ async def handle_websocket(request):
                                 # Optimistically remove from cache and trigger subscription update
                                 if order['id'] in orders_cache:
                                     del orders_cache[order['id']]
-                                    await update_subscriptions_if_needed(request.app)
+                                await update_subscriptions_if_needed(request.app)
                             except Exception as e:
                                 logger.error(f"Failed to cancel order {order['id']}: {e}")
                         
@@ -173,7 +174,7 @@ async def handle_websocket(request):
                         
                         for order in all_orders:
                              try:
-                                await binance_exchange.cancel_order(order['id'], order['symbol'])
+                                await request.app['binance_exchange'].cancel_order(order['id'], order['symbol'])
                                 logger.info(f"Successfully sent cancel request for order {order['id']}")
                              except Exception as e:
                                 logger.error(f"Failed to cancel order {order['id']}: {e}")
@@ -430,7 +431,7 @@ async def on_startup(app):
     """
     aiohttp 앱 시작 시 백그라운드 태스크를 생성합니다.
     """
-    global binance_exchange
+    # global binance_exchange # 전역 변수 사용을 지양하고 app context에 저장
     app['tracked_assets'] = set()
     logger.info("Server starting up...")
     
@@ -442,7 +443,7 @@ async def on_startup(app):
         api_key = secrets['exchanges']['binance']['api_key']
         secret_key = secrets['exchanges']['binance']['secret_key']
         
-        binance_exchange = binance({
+        app['binance_exchange'] = binance({
             'apiKey': api_key,
             'secret': secret_key,
             'enableRateLimit': True,
@@ -465,7 +466,7 @@ async def on_startup(app):
 
         # 초기 미체결 주문 가져오기
         try:
-            open_orders = await binance_exchange.fetch_open_orders()
+            open_orders = await app['binance_exchange'].fetch_open_orders()
             for order in open_orders:
                 price = Decimal(str(order.get('price') or 0))
                 amount = Decimal(str(order.get('amount') or 0))
@@ -498,10 +499,10 @@ async def on_startup(app):
         app['fetcher_task'] = asyncio.create_task(binance_data_fetcher(app))
     
         # User Data Stream 시작
-        listen_key = await get_listen_key(binance_exchange)
+        listen_key = await get_listen_key(app['binance_exchange'])
         if listen_key:
             app['user_data_stream_task'] = asyncio.create_task(user_data_stream_fetcher(app, listen_key))
-            app['keepalive_task'] = asyncio.create_task(keepalive_listen_key(binance_exchange, listen_key))
+            app['keepalive_task'] = asyncio.create_task(keepalive_listen_key(app['binance_exchange'], listen_key))
             logger.info("User data stream and keepalive tasks started.")
 
     except (FileNotFoundError, KeyError) as e:
@@ -520,7 +521,6 @@ async def on_cleanup(app):
     """
     모든 정리가 끝난 후 마지막으로 실행됩니다. 백그라운드 태스크를 취소합니다.
     """
-    global binance_exchange
     logger.info("Cleaning up background tasks...")
     if 'fetcher_task' in app:
         app['fetcher_task'].cancel()
@@ -541,8 +541,8 @@ async def on_cleanup(app):
         except asyncio.CancelledError:
             pass # 작업 취소는 예상된 동작
 
-    if binance_exchange:
-        await binance_exchange.close()
+    if 'binance_exchange' in app:
+        await app['binance_exchange'].close()
         logger.info("Binance exchange connection closed.")
 
     logger.info("All background tasks stopped.")
