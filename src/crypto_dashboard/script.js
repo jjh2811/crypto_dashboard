@@ -6,6 +6,24 @@ document.addEventListener("DOMContentLoaded", () => {
     const ordersContainer = document.getElementById("orders-container");
     let currentPrices = {};
     let cachedOrders = [];
+    const modal = document.getElementById("details-modal");
+    const closeButton = document.querySelector(".close-button");
+
+    closeButton.onclick = () => {
+        modal.style.display = "none";
+    }
+    window.onclick = (event) => {
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    }
+
+    cryptoContainer.addEventListener('click', (event) => {
+        const card = event.target.closest('.crypto-card');
+        if (card && card.dataset.symbol) {
+            openDetailsModal(card.dataset);
+        }
+    });
 
     const cancelSelectedBtn = document.getElementById("cancel-selected-btn");
     const cancelAllBtn = document.getElementById("cancel-all-btn");
@@ -87,6 +105,11 @@ document.addEventListener("DOMContentLoaded", () => {
             cryptoContainer.appendChild(card);
         }
         
+        // Store data in dataset for modal
+        Object.keys(data).forEach(key => {
+            card.dataset[key] = data[key];
+        });
+
         card.innerHTML = createCryptoCardHTML(data);
         updateTotalValue();
     }
@@ -180,9 +203,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         return `
             <h2>${symbol}</h2>
-            <p class="amount">Free: ${parseFloat(free.toFixed(8))}</p>
-            ${lockedAmountHtml}
-            <p class="total-amount">Total: ${parseFloat(totalAmount.toFixed(8))}</p>
             <p class="price">Price: $${price.toFixed(2)}</p>
             ${avgBuyPriceHtml}
             <p class="value" data-value="${value.toFixed(2)}">Value: $${value.toFixed(2)}</p>
@@ -213,6 +233,19 @@ document.addEventListener("DOMContentLoaded", () => {
             <p class="value">Value: $${parseFloat(order.value).toFixed(2)}</p>
             <p class="date">${orderDate}</p>
         `;
+    }
+
+    function openDetailsModal(dataset) {
+        document.getElementById("modal-crypto-name").textContent = dataset.symbol;
+        const free = parseFloat(dataset.free || 0);
+        const locked = parseFloat(dataset.locked || 0);
+        const total = free + locked;
+
+        document.getElementById("modal-crypto-free").textContent = `Free: ${parseFloat(free.toFixed(8))}`;
+        document.getElementById("modal-crypto-locked").textContent = `Locked: ${parseFloat(locked.toFixed(8))}`;
+        document.getElementById("modal-crypto-total").textContent = `Total: ${parseFloat(total.toFixed(8))}`;
+        
+        modal.style.display = "block";
     }
 });
 
