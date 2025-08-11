@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
     const cryptoContainer = document.getElementById("crypto-container");
-    const websocket = new WebSocket(`ws://${window.location.host}/ws`);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const websocket = new WebSocket(`${protocol}//${window.location.host}/ws`);
     const totalValueElement = document.getElementById("total-value");
     const ordersContainer = document.getElementById("orders-container");
     let currentPrices = {};
