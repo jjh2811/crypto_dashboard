@@ -195,17 +195,28 @@ document.addEventListener("DOMContentLoaded", () => {
             const profitPercent = ((price - avg_buy_price) / avg_buy_price) * 100;
             const profitClass = profitPercent >= 0 ? 'profit-positive' : 'profit-negative';
             avgBuyPriceHtml = `
-                <p class="avg-buy-price">Avg: $${avg_buy_price.toFixed(2)}</p>
-                <p class="profit ${profitClass}">${profitPercent.toFixed(2)}%</p>
+                <div class="info-row">
+                    <span class="info-label">Avg. Price:</span>
+                    <span class="info-value">$${parseFloat(avg_buy_price.toPrecision(8))}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">P/L:</span>
+                    <span class="info-value ${profitClass}">${profitPercent.toFixed(2)}%</span>
+                </div>
             `;
         }
 
-
         return `
             <h2>${symbol}</h2>
-            <p class="price">Price: $${price.toFixed(2)}</p>
+            <div class="info-row">
+                <span class="info-label">Price:</span>
+                <span class="info-value">$${parseFloat(price.toPrecision(8))}</span>
+            </div>
             ${avgBuyPriceHtml}
-            <p class="value" data-value="${value.toFixed(2)}">Value: $${value.toFixed(2)}</p>
+            <div class="info-row value" data-value="${value.toFixed(2)}">
+                <span class="info-label">Value:</span>
+                <span class="info-value">$${value.toFixed(2)}</span>
+            </div>
         `;
     }
 
@@ -227,7 +238,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <input type="checkbox" class="order-checkbox" data-order-id="${order.id}" data-symbol="${order.symbol}">
             </div>
             <p class="side ${sideClass}">${order.side}</p>
-            <p class="price">Price: ${parseFloat(order.price).toFixed(2)}</p>
+            <p class="price">Price: ${parseFloat(order.price)}</p>
             ${priceDiffHtml}
             <p class="amount">Amount: ${order.amount}</p>
             <p class="value">Value: $${parseFloat(order.value).toFixed(2)}</p>

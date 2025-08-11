@@ -113,17 +113,26 @@ h1 {
     text-align: center;
 }
 
-.crypto-card .amount, .crypto-card .price {
+.crypto-card .info-row {
+    display: flex;
+    justify-content: space-between;
+    margin: 8px 0;
     font-size: 1.1em;
-    color: #5f6368;
-    margin: 5px 0;
 }
 
-.crypto-card .value {
-    font-size: 1.5em;
+.crypto-card .info-label {
+    color: #5f6368;
+    text-align: left;
+}
+
+.crypto-card .info-value {
     font-weight: bold;
+    text-align: right;
+}
+
+.crypto-card .value .info-value {
+    font-size: 1.3em;
     color: #28a745;
-    margin-top: 10px;
 }
 
 .crypto-card .side {
