@@ -56,11 +56,8 @@ def create_balance_update_message(symbol, balance_data):
 async def handle_websocket(request):
     ws = web.WebSocketResponse()
     await ws.prepare(request)
-    
-    remote_ip = request.remote
-    user_agent = request.headers.get('User-Agent', '-')
-    logger.info(f'Client connected: {remote_ip} - "GET {request.path} HTTP/1.1" 101 - "{user_agent}"')
-    
+
+    logger.info('Client connected.')
     clients.add(ws)
     logger.info(f"Total clients: {len(clients)}")
 
@@ -105,10 +102,10 @@ async def handle_websocket(request):
             elif msg.type == web.WSMsgType.ERROR:
                 logger.error(f'ws connection closed with exception {ws.exception()}')
     except asyncio.CancelledError:
-        logger.info(f"Websocket handler for {request.remote} cancelled.")
+        logger.info("Websocket handler cancelled.")
     finally:
         clients.discard(ws)
-        logger.info(f"Client disconnected: {request.remote}. Total clients: {len(clients)}")
+        logger.info(f"Client disconnected. Total clients: {len(clients)}")
     return ws
 
 async def http_handler(request):
