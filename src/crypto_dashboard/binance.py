@@ -305,10 +305,22 @@ class BinanceExchange:
                                     'status': status
                                 }
                                 logger.info(f"New/updated order: {order_id} - {symbol} {status}")
+                                await self.app['broadcast_log']({
+                                    'status': status,
+                                    'symbol': symbol,
+                                    'side': data.get('S'),
+                                    'price': float(price),
+                                    'amount': float(amount)
+                                })
                             else:
                                 if order_id in self.orders_cache:
                                     del self.orders_cache[order_id]
                                     logger.info(f"Order {order_id} removed from cache.")
+                                    await self.app['broadcast_log']({
+                                        'status': status,
+                                        'symbol': symbol,
+                                        'side': data.get('S')
+                                    })
                             
                             await self.app['broadcast_orders_update']()
 
@@ -380,18 +392,23 @@ class BinanceExchange:
         try:
             await self.exchange.cancel_order(order_id, symbol)
             logger.info(f"Successfully sent cancel request for order {order_id}")
+            await self.app['broadcast_log']({'status': 'Cancelling', 'symbol': symbol, 'order_id': order_id})
             if order_id in self.orders_cache:
                 del self.orders_cache[order_id]
             await self.update_subscriptions_if_needed()
         except Exception as e:
             logger.error(f"Failed to cancel order {order_id}: {e}")
+            await self.app['broadcast_log']({'status': 'Cancel Failed', 'symbol': symbol, 'order_id': order_id, 'reason': str(e)})
 
     async def cancel_all_orders(self) -> None:
         logger.info("Received request to cancel all orders.")
         all_orders = list(self.orders_cache.values())
         if not all_orders:
             logger.info("No open orders to cancel.")
+            await self.app['broadcast_log']({'status': 'Info', 'message': 'No open orders to cancel.'})
             return
+
+        await self.app['broadcast_log']({'status': 'Info', 'message': f'Cancelling all {len(all_orders)} orders.'})
         
         for order in all_orders:
             order_id = order.get('id')
@@ -403,6 +420,7 @@ class BinanceExchange:
                 logger.info(f"Successfully sent cancel request for order {order_id}")
             except Exception as e:
                 logger.error(f"Failed to cancel order {order_id}: {e}")
+                await self.app['broadcast_log']({'status': 'Cancel Failed', 'symbol': symbol, 'order_id': order_id, 'reason': str(e)})
         
         self.orders_cache.clear()
 

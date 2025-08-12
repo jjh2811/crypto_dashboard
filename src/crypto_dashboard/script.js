@@ -4,6 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const websocket = new WebSocket(`${protocol}//${window.location.host}/ws`);
     const totalValueElement = document.getElementById("total-value");
     const ordersContainer = document.getElementById("orders-container");
+    const logsContainer = document.getElementById("logs-container");
     let currentPrices = {};
     let cachedOrders = [];
     const modal = document.getElementById("details-modal");
@@ -85,6 +86,37 @@ document.addEventListener("DOMContentLoaded", () => {
             } else if (data.type === 'orders_update') {
                 cachedOrders = data.data;
                 updateOrdersList(cachedOrders); // Full redraw only on order changes
+            } else if (data.type === 'log') {
+                const logData = data.message;
+                const logElement = document.createElement('p');
+                const now = new Date();
+                const timestamp = `${now.getMonth() + 1}/${now.getDate()} ${now.toLocaleTimeString()}`;
+                
+                let messageText = `[${timestamp}] ${logData.status}`;
+                if (logData.symbol) {
+                    messageText += ` - ${logData.symbol}`;
+                }
+                if (logData.message) {
+                    messageText += ` - ${logData.message}`;
+                }
+                if (logData.side) {
+                    messageText += ` (${logData.side})`;
+                }
+                if (logData.price) {
+                    messageText += ` | Price: ${parseFloat(logData.price.toPrecision(8))}`;
+                }
+                if (logData.amount) {
+                    messageText += ` | Amount: ${parseFloat(logData.amount.toPrecision(8))}`;
+                }
+                if (logData.order_id) {
+                    messageText += ` | Order ID: ${logData.order_id}`;
+                }
+                if (logData.reason) {
+                    messageText += ` | Reason: ${logData.reason}`;
+                }
+
+                logElement.textContent = messageText;
+                logsContainer.insertBefore(logElement, logsContainer.firstChild);
             } else {
                 // 'free' 또는 'amount' 키가 존재하면 보유 자산 정보로 간주하고 카드 업데이트
                 if (data.free !== undefined || data.amount !== undefined) {

@@ -20,6 +20,7 @@ logger.addHandler(stream_handler)
 clients = set()
 balances_cache = {}
 orders_cache = {}
+log_cache = []
 
 async def broadcast_message(message):
     """모든 연결된 클라이언트에게 메시지를 전송합니다."""
@@ -33,6 +34,13 @@ async def broadcast_orders_update():
     """모든 클라이언트에게 현재 주문 목록을 전송합니다."""
     update_message = {'type': 'orders_update', 'data': list(orders_cache.values())}
     await broadcast_message(update_message)
+
+async def broadcast_log(message):
+    """모든 클라이언트에게 로그 메시지를 전송합니다."""
+    log_message = {'type': 'log', 'message': message}
+    log_cache.append(log_message)
+    logger.info(f"LOG: {message}")
+    await broadcast_message(log_message)
 
 def create_balance_update_message(symbol, balance_data):
     """잔고 정보로부터 클라이언트에게 보낼 업데이트 메시지를 생성합니다."""
@@ -74,6 +82,14 @@ async def handle_websocket(request):
             except ConnectionResetError:
                 logger.warning("Failed to send initial 'orders_update' to a newly connected client.")
 
+        if log_cache:
+            for log_msg in log_cache:
+                try:
+                    await ws.send_json(log_msg)
+                except ConnectionResetError:
+                    logger.warning("Failed to send cached logs to a newly connected client.")
+                    break
+        
         async for msg in ws:
             if msg.type == web.WSMsgType.TEXT:
                 try:
@@ -93,7 +109,6 @@ async def handle_websocket(request):
                         await broadcast_orders_update()
                     
                     elif msg_type == 'cancel_all_orders':
-                        logger.info("Received request to cancel all orders.")
                         await exchange.cancel_all_orders()
                         await broadcast_orders_update()
 
@@ -119,8 +134,10 @@ async def on_startup(app):
     logger.info("Server starting up...")
     app['balances_cache'] = balances_cache
     app['orders_cache'] = orders_cache
+    app['log_cache'] = log_cache
     app['broadcast_message'] = broadcast_message
     app['broadcast_orders_update'] = broadcast_orders_update
+    app['broadcast_log'] = broadcast_log
     app['create_balance_update_message'] = create_balance_update_message
     app['tracked_assets'] = set()
     app['price_ws_ready'] = asyncio.Event()
