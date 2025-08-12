@@ -89,7 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
             } else if (data.type === 'log') {
                 const logData = data.message;
                 const logElement = document.createElement('p');
-                const now = new Date();
+                const now = new Date(data.timestamp);
                 const timestamp = `${now.getMonth() + 1}/${now.getDate()} ${now.toLocaleTimeString()}`;
                 
                 let messageText = `[${timestamp}] ${logData.status}`;

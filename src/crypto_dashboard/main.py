@@ -3,6 +3,7 @@ import asyncio
 import os
 import json
 import logging
+from datetime import datetime, timezone
 from aiohttp import web
 
 from .binance import BinanceExchange
@@ -37,7 +38,11 @@ async def broadcast_orders_update():
 
 async def broadcast_log(message):
     """모든 클라이언트에게 로그 메시지를 전송합니다."""
-    log_message = {'type': 'log', 'message': message}
+    log_message = {
+        'type': 'log',
+        'message': message,
+        'timestamp': datetime.now(timezone.utc).isoformat()
+    }
     log_cache.append(log_message)
     logger.info(f"LOG: {message}")
     await broadcast_message(log_message)
