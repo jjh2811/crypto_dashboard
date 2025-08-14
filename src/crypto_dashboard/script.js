@@ -293,10 +293,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const free = parseFloat(dataset.free || 0);
         const locked = parseFloat(dataset.locked || 0);
         const total = free + locked;
+        const percentage = total > 0 ? ((free / total) * 100).toFixed(2) : 0;
 
-        document.getElementById("modal-crypto-free").textContent = `Free: ${parseFloat(free.toFixed(8))}`;
-        document.getElementById("modal-crypto-locked").textContent = `Locked: ${parseFloat(locked.toFixed(8))}`;
-        document.getElementById("modal-crypto-total").textContent = `Total: ${parseFloat(total.toFixed(8))}`;
+        const balanceDetailsContainer = document.getElementById("modal-crypto-balance-details");
+        balanceDetailsContainer.innerHTML = `
+            <span class="info-label">Free:</span>
+            <span class="info-value">${parseFloat(free.toFixed(8))} / ${parseFloat(total.toFixed(8))} (${percentage}%)</span>
+        `;
         
         modal.style.display = "block";
     }
