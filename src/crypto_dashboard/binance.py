@@ -118,29 +118,46 @@ class BinanceExchange:
             if not trade_history:
                 return None
 
-            amount_to_trace = Decimal(str(current_amount))
-            cost = Decimal('0')
-            amount_traced = Decimal('0')
+            sorted_trades = sorted(trade_history, key=lambda x: x.get('timestamp', 0))
             
-            for trade in sorted(trade_history, key=lambda x: x.get('timestamp', 0), reverse=True):
-                if amount_to_trace <= Decimal('0'):
-                    break
+            running_amount = current_amount
+            start_index = -1
 
+            for i in range(len(sorted_trades) - 1, -1, -1):
+                trade = sorted_trades[i]
+                side = trade.get('side')
                 filled = Decimal(str(trade.get('filled', '0')))
-                price = Decimal(str(trade.get('price', '0')))
+                
+                if side == 'sell':
+                    running_amount += filled
+                elif side == 'buy':
+                    running_amount -= filled
 
-                if trade.get('side') == 'buy':
-                    buy_amount = min(amount_to_trace, filled)
-                    cost += buy_amount * price
-                    amount_traced += buy_amount
-                    amount_to_trace -= buy_amount
+                if running_amount == Decimal('0'):
+                    start_index = i
+                    break
             
-            if amount_traced > Decimal('0'):
-                return cost / amount_traced
+            if start_index == -1:
+                return None
+
+            total_cost = Decimal('0')
+            total_amount_bought = Decimal('0')
+
+            for i in range(start_index, len(sorted_trades)):
+                trade = sorted_trades[i]
+                if trade.get('side') == 'buy':
+                    filled = Decimal(str(trade.get('filled', '0')))
+                    price = Decimal(str(trade.get('price', '0')))
+                    total_cost += filled * price
+                    total_amount_bought += filled
+
+            if total_amount_bought > Decimal('0'):
+                return total_cost / total_amount_bought
+            
             return None
 
         except Exception as e:
-            logger.error(f"Error calculating average buy price for {asset}: {e}")
+            logger.error(f"Error calculating average buy price for {asset}: {e}", exc_info=True)
             return None
 
     async def get_listen_key(self) -> Optional[str]:
