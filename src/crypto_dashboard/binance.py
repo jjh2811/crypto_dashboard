@@ -279,6 +279,7 @@ class BinanceExchange:
                                     
                                     self.balances_cache[asset]['free'] = free_amount
                                     self.balances_cache[asset]['locked'] = locked_amount
+                                    self.balances_cache[asset]['total_amount'] = total_amount
                                     
                                     if has_changed:
                                         logger.info(f"Balance for {asset} updated. Free: {free_amount}, Locked: {locked_amount}")
@@ -341,25 +342,32 @@ class BinanceExchange:
                             
                             await self.app['broadcast_orders_update']()
 
-                            if status == 'FILLED':
+                            if status in ['PARTIALLY_FILLED', 'FILLED'] and data.get('S') == 'BUY':
                                 asset = symbol.replace('USDT', '')
-                                if asset in self.balances_cache and data.get('S') == 'BUY':
-                                    old_total_amount = self.balances_cache[asset].get('total_amount', Decimal('0'))
-                                    old_avg_price = self.balances_cache[asset].get('avg_buy_price', Decimal('0'))
-                                    
-                                    filled_amount = Decimal(data.get('q', '0'))
-                                    filled_price = Decimal(data.get('p', '0'))
+                                # 'l' is Last executed quantity, 'L' is Last executed price
+                                last_filled_quantity = Decimal(data.get('l', '0'))
+                                last_filled_price = Decimal(data.get('L', '0'))
 
-                                    if old_total_amount > 0 and old_avg_price > 0:
-                                        old_cost = old_total_amount * old_avg_price
-                                        new_cost = filled_amount * filled_price
-                                        new_total_amount = old_total_amount + filled_amount
-                                        new_avg_price = (old_cost + new_cost) / new_total_amount
+                                if asset in self.balances_cache and last_filled_quantity > 0:
+                                    old_total_amount = self.balances_cache[asset].get('total_amount', Decimal('0'))
+                                    old_avg_price = self.balances_cache[asset].get('avg_buy_price')
+
+                                    if old_avg_price is None or old_avg_price <= 0 or old_total_amount <= 0:
+                                        new_avg_price = last_filled_price
                                     else:
-                                         new_avg_price = filled_price
-                                    
+                                        old_cost = old_total_amount * old_avg_price
+                                        fill_cost = last_filled_quantity * last_filled_price
+                                        new_total_amount = old_total_amount + last_filled_quantity
+                                        
+                                        if new_total_amount > 0:
+                                            new_avg_price = (old_cost + fill_cost) / new_total_amount
+                                        else:
+                                            new_avg_price = last_filled_price
+
                                     self.balances_cache[asset]['avg_buy_price'] = new_avg_price
-                                    logger.info(f"Average price for {asset} updated to {new_avg_price} by new trade.")
+                                    self.balances_cache[asset]['total_amount'] = old_total_amount + last_filled_quantity
+                                    
+                                    logger.info(f"Average price for {asset} updated to {new_avg_price} by trade. Last fill: {last_filled_quantity} @ {last_filled_price}")
                             
                             await self.update_subscriptions_if_needed()
 
