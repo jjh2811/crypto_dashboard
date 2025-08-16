@@ -4,6 +4,7 @@ from decimal import Decimal
 import json
 import logging
 import time
+import os
 from typing import Any, Dict, List, Optional, Protocol, TypedDict, cast
 
 from aiohttp import web
@@ -57,6 +58,11 @@ class ExchangeProtocol(Protocol):
 
 class BinanceExchange:
     def __init__(self, api_key: str, secret_key: str, app: web.Application) -> None:
+        with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
+            config = json.load(f)
+        self.price_ws_url = config['binance']['price_ws_url']
+        self.user_data_ws_url = config['binance']['user_data_ws_url']
+
         self._exchange = binance({
             'apiKey': api_key,
             'secret': secret_key,
@@ -204,10 +210,9 @@ class BinanceExchange:
         logger.info("User data stream subscribe request sent.")
 
     async def connect_price_ws(self) -> None:
-        url = "wss://stream.binance.com:9443/ws"
         while True:
             try:
-                async with connect(url) as websocket:
+                async with connect(self.price_ws_url) as websocket:
                     self.app['price_ws'] = websocket
                     logger.info("Price data websocket connection established.")
                     if self.app.get('price_ws_ready'):
@@ -262,12 +267,11 @@ class BinanceExchange:
         if price_ws_ready:
             await price_ws_ready.wait()
 
-        url = "wss://ws-api.binance.com:443/ws-api/v3"
-        logger.info(f"Connecting to Binance User Data Stream: {url}")
+        logger.info(f"Connecting to Binance User Data Stream: {self.user_data_ws_url}")
 
         while True:
             try:
-                async with connect(url) as websocket:
+                async with connect(self.user_data_ws_url) as websocket:
                     self.wscp = websocket
                     await self._logon(websocket)
 
