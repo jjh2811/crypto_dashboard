@@ -175,11 +175,8 @@ async def on_startup(app):
     app['tracked_assets'] = holding_assets | order_assets
 
     app['price_ws_task'] = asyncio.create_task(exchange.connect_price_ws())
-    listen_key = await exchange.get_listen_key()
-    if listen_key:
-        app['user_data_ws_task'] = asyncio.create_task(exchange.connect_user_data_ws(listen_key))
-        app['keepalive_task'] = asyncio.create_task(exchange.keepalive_listen_key(listen_key))
-        logger.info("User data stream and keepalive tasks started.")
+    app['user_data_ws_task'] = asyncio.create_task(exchange.connect_user_data_ws())
+    logger.info("User data stream task started.")
 
 async def on_shutdown(app):
     logger.info("Shutdown signal received. Closing client connections...")
@@ -189,7 +186,7 @@ async def on_shutdown(app):
 
 async def on_cleanup(app):
     logger.info("Cleaning up background tasks...")
-    tasks_to_cancel = ['price_ws_task', 'user_data_ws_task', 'keepalive_task']
+    tasks_to_cancel = ['price_ws_task', 'user_data_ws_task']
     for task_name in tasks_to_cancel:
         if task_name in app and not app[task_name].done():
             app[task_name].cancel()

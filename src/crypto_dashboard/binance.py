@@ -1,13 +1,18 @@
 import asyncio
+import base64
+from decimal import Decimal
 import json
 import logging
-from decimal import Decimal
+import time
 from typing import Any, Dict, List, Optional, Protocol, TypedDict, cast
 
-import aiohttp
-import websockets
 from aiohttp import web
 from ccxt.async_support import binance
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
+from websockets.exceptions import ConnectionClosed, ConnectionClosedError
+from websockets.legacy.client import WebSocketClientProtocol, connect
+from websockets.protocol import State
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +47,7 @@ class ExchangeProtocol(Protocol):
 
     async def cancel_order(self, order_id: str, symbol: str) -> Any:
         ...
-    
+
     async def fetch_closed_orders(self, *args, **kwargs) -> List[Order]:
         ...
 
@@ -64,6 +69,7 @@ class BinanceExchange:
         self.app = app
         self.balances_cache: Dict[str, Dict[str, Any]] = app['balances_cache']
         self.orders_cache: Dict[str, Dict[str, Any]] = app['orders_cache']
+        self.wscp: Optional[WebSocketClientProtocol] = None
 
     @property
     def exchange(self) -> ExchangeProtocol:
@@ -119,7 +125,7 @@ class BinanceExchange:
                 return None
 
             sorted_trades = sorted(trade_history, key=lambda x: x.get('timestamp', 0))
-            
+
             running_amount = current_amount
             start_index = -1
 
@@ -127,7 +133,7 @@ class BinanceExchange:
                 trade = sorted_trades[i]
                 side = trade.get('side')
                 filled = Decimal(str(trade.get('filled', '0')))
-                
+
                 if side == 'sell':
                     running_amount += filled
                 elif side == 'buy':
@@ -136,7 +142,7 @@ class BinanceExchange:
                 if running_amount == Decimal('0'):
                     start_index = i
                     break
-            
+
             if start_index == -1:
                 return None
 
@@ -153,45 +159,55 @@ class BinanceExchange:
 
             if total_amount_bought > Decimal('0'):
                 return total_cost / total_amount_bought
-            
+
             return None
 
         except Exception as e:
             logger.error(f"Error calculating average buy price for {asset}: {e}", exc_info=True)
             return None
 
-    async def get_listen_key(self) -> Optional[str]:
-        listen_url = 'https://api.binance.com/api/v3/userDataStream'
-        headers = {'X-MBX-APIKEY': self.exchange.apiKey}
+    async def _logon(self, wscp: WebSocketClientProtocol) -> None:
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(listen_url, headers=headers, timeout=aiohttp.ClientTimeout(total=5)) as response:
-                    response.raise_for_status()
-                    data = await response.json()
-                    logger.info("Successfully obtained listen key.")
-                    return data.get('listenKey')
-        except Exception as e:
-            logger.error(f"Failed to get listen key: {e}")
-            return None
+            private_key = serialization.load_pem_private_key(
+                self.exchange.secret.encode('utf-8'),
+                password=None
+            )
+            if not isinstance(private_key, ed25519.Ed25519PrivateKey):
+                raise TypeError("The provided key is not an Ed25519 private key.")
 
-    async def keepalive_listen_key(self, listen_key: str) -> None:
-        listen_url = 'https://api.binance.com/api/v3/userDataStream'
-        headers = {'X-MBX-APIKEY': self.exchange.apiKey}
-        while True:
-            try:
-                await asyncio.sleep(1800)  # 30분
-                async with aiohttp.ClientSession() as session:
-                    async with session.put(listen_url, headers=headers, params={'listenKey': listen_key}, timeout=aiohttp.ClientTimeout(total=5)) as response:
-                        response.raise_for_status()
-            except Exception as e:
-                logger.error(f"Failed to keep listen key alive: {e}")
-                break
+            timestamp = str(int(time.time() * 1000))
+            payload = f"apiKey={self.exchange.apiKey}&timestamp={timestamp}"
+            signature = base64.b64encode(private_key.sign(payload.encode('utf-8'))).decode('utf-8')
+
+            logon_request = {
+                "id": "logon_request",
+                "method": "session.logon",
+                "params": {
+                    "apiKey": self.exchange.apiKey,
+                    "timestamp": timestamp,
+                    "signature": signature,
+                },
+            }
+            await wscp.send(json.dumps(logon_request))
+            logger.info("Logon request sent.")
+        except Exception as e:
+            logger.error(f"Error during logon: {e}", exc_info=True)
+            raise
+
+    async def _subscribe(self, wscp: WebSocketClientProtocol) -> None:
+        subscribe_request = {
+            "id": "subscribe_request",
+            "method": "userDataStream.subscribe",
+            "params": {}
+        }
+        await wscp.send(json.dumps(subscribe_request))
+        logger.info("User data stream subscribe request sent.")
 
     async def connect_price_ws(self) -> None:
         url = "wss://stream.binance.com:9443/ws"
         while True:
             try:
-                async with websockets.connect(url) as websocket:
+                async with connect(url) as websocket:
                     self.app['price_ws'] = websocket
                     logger.info("Price data websocket connection established.")
                     if self.app.get('price_ws_ready'):
@@ -228,7 +244,7 @@ class BinanceExchange:
                         elif 'result' in data:
                             logger.info(f"Subscription response received: {data}")
 
-            except (websockets.ConnectionClosed, websockets.ConnectionClosedError):
+            except (ConnectionClosed, ConnectionClosedError):
                 logger.warning("Price data websocket connection closed. Reconnecting in 5 seconds...")
                 if self.app.get('price_ws_ready'):
                     self.app['price_ws_ready'].clear()
@@ -241,19 +257,40 @@ class BinanceExchange:
                 self.app['price_ws'] = None
                 await asyncio.sleep(5)
 
-    async def connect_user_data_ws(self, listen_key: str) -> None:
+    async def connect_user_data_ws(self) -> None:
         price_ws_ready = self.app.get('price_ws_ready')
         if price_ws_ready:
             await price_ws_ready.wait()
-        url = f"wss://stream.binance.com:9443/ws/{listen_key}"
+
+        url = "wss://ws-api.binance.com:443/ws-api/v3"
         logger.info(f"Connecting to Binance User Data Stream: {url}")
+
         while True:
             try:
-                async with websockets.connect(url) as websocket:
-                    logger.info("Binance User Data Stream connection established.")
+                async with connect(url) as websocket:
+                    self.wscp = websocket
+                    await self._logon(websocket)
+
                     while True:
                         message = await websocket.recv()
                         data = json.loads(message)
+
+                        if 'id' in data:
+                            if data['id'] == 'logon_request':
+                                if data.get('status') == 200:
+                                    logger.info("Logon successful.")
+                                    await self._subscribe(websocket)
+                                else:
+                                    logger.error(f"Logon failed: {data}")
+                                    break
+                            elif data['id'] == 'subscribe_request':
+                                if data.get('status') == 200:
+                                    logger.info("User data stream subscription successful.")
+                                else:
+                                    logger.error(f"Subscription failed: {data}")
+                                    break
+                            continue
+
                         event_type = data.get('e')
 
                         if event_type == 'outboundAccountPosition':
@@ -276,22 +313,22 @@ class BinanceExchange:
                                     if not is_existing:
                                         logger.info(f"New asset detected: {asset}, free: {free_amount}, locked: {locked_amount}")
                                         self.balances_cache[asset] = {'price': 0}
-                                    
+
                                     self.balances_cache[asset]['free'] = free_amount
                                     self.balances_cache[asset]['locked'] = locked_amount
                                     self.balances_cache[asset]['total_amount'] = total_amount
-                                    
+
                                     if has_changed:
                                         logger.info(f"Balance for {asset} updated. Free: {free_amount}, Locked: {locked_amount}")
                                         if 'avg_buy_price' not in self.balances_cache[asset]:
                                              self.balances_cache[asset]['avg_buy_price'] = await self.calculate_average_buy_price(asset, total_amount)
-                                        
+
                                         update_message = self.app['create_balance_update_message'](asset, self.balances_cache[asset])
                                         await self.app['broadcast_message'](update_message)
 
                                     if asset == 'USDT' and self.balances_cache[asset].get('price', 0) == 0:
                                         self.balances_cache[asset]['price'] = 1.0
-                                    
+
                                     if not is_existing:
                                         await self.update_subscriptions_if_needed()
 
@@ -300,14 +337,14 @@ class BinanceExchange:
                                     del self.balances_cache[asset]
                                     await self.app['broadcast_message']({'type': 'remove_holding', 'symbol': asset})
                                     await self.update_subscriptions_if_needed()
-                        
+
                         elif event_type == 'executionReport':
                             order_id = data.get('i')
                             symbol = data.get('s')
                             status = data.get('X')
                             if not all([order_id, symbol, status]):
                                 continue
-                            
+
                             if status in ['NEW', 'PARTIALLY_FILLED']:
                                 price = Decimal(data.get('p', '0'))
                                 amount = Decimal(data.get('q', '0'))
@@ -339,7 +376,7 @@ class BinanceExchange:
                                         'symbol': symbol,
                                         'side': data.get('S')
                                     })
-                            
+
                             await self.app['broadcast_orders_update']()
 
                             if status in ['PARTIALLY_FILLED', 'FILLED'] and data.get('S') == 'BUY':
@@ -358,7 +395,7 @@ class BinanceExchange:
                                         old_cost = old_total_amount * old_avg_price
                                         fill_cost = last_filled_quantity * last_filled_price
                                         new_total_amount = old_total_amount + last_filled_quantity
-                                        
+
                                         if new_total_amount > 0:
                                             new_avg_price = (old_cost + fill_cost) / new_total_amount
                                         else:
@@ -366,16 +403,18 @@ class BinanceExchange:
 
                                     self.balances_cache[asset]['avg_buy_price'] = new_avg_price
                                     self.balances_cache[asset]['total_amount'] = old_total_amount + last_filled_quantity
-                                    
+
                                     logger.info(f"Average price for {asset} updated to {new_avg_price} by trade. Last fill: {last_filled_quantity} @ {last_filled_price}")
-                            
+
                             await self.update_subscriptions_if_needed()
 
-            except websockets.ConnectionClosed:
+            except ConnectionClosed:
                 logger.warning("User Data Stream connection closed. Reconnecting in 5 seconds...")
+                self.wscp = None
                 await asyncio.sleep(5)
             except Exception as e:
-                logger.error(f"Error in User Data Stream fetcher: {e}")
+                logger.error(f"Error in User Data Stream fetcher: {e}", exc_info=True)
+                self.wscp = None
                 await asyncio.sleep(5)
 
     async def update_subscriptions_if_needed(self) -> None:
@@ -385,7 +424,7 @@ class BinanceExchange:
 
         async with lock:
             websocket = self.app.get('price_ws')
-            if not websocket or websocket.state != websockets.protocol.State.OPEN:
+            if not websocket or websocket.state != State.OPEN:
                 logger.warning("Price websocket not available for subscription update.")
                 return
 
@@ -400,9 +439,9 @@ class BinanceExchange:
             holding_assets = set(self.balances_cache.keys())
             order_assets = {order.get('symbol', '').replace('USDT', '').replace('/', '') for order in self.orders_cache.values()}
             required_assets = (holding_assets | order_assets)
-            
+
             current_assets = self.app.get('tracked_assets', set())
-            
+
             to_add = required_assets - current_assets
             to_remove = current_assets - required_assets
 
@@ -434,7 +473,7 @@ class BinanceExchange:
             return
 
         await self.app['broadcast_log']({'status': 'Info', 'message': f'Cancelling all {len(all_orders)} orders.'})
-        
+
         for order in all_orders:
             order_id = order.get('id')
             symbol = order.get('symbol')
@@ -446,7 +485,7 @@ class BinanceExchange:
             except Exception as e:
                 logger.error(f"Failed to cancel order {order_id}: {e}")
                 await self.app['broadcast_log']({'status': 'Cancel Failed', 'symbol': symbol, 'order_id': order_id, 'reason': str(e)})
-        
+
         self.orders_cache.clear()
 
     async def close(self) -> None:
