@@ -241,7 +241,7 @@ class BinanceExchange:
                                 update_message = {'symbol': symbol, 'price': float(Decimal(price)), 'quote_currency': 'USDT'}
 
                             await self.app['broadcast_message'](update_message)
-                        elif 'result' in data:
+                        elif 'result' in data and data.get('result') is None:
                             logger.info(f"Subscription response received: {data}")
 
             except (ConnectionClosed, ConnectionClosedError):
@@ -273,9 +273,10 @@ class BinanceExchange:
 
                     while True:
                         message = await websocket.recv()
-                        data = json.loads(message)
+                        raw_data = json.loads(message)
 
-                        if 'id' in data:
+                        if 'id' in raw_data:
+                            data = raw_data
                             if data['id'] == 'logon_request':
                                 if data.get('status') == 200:
                                     logger.info("Logon successful.")
@@ -290,7 +291,12 @@ class BinanceExchange:
                                     logger.error(f"Subscription failed: {data}")
                                     break
                             continue
-
+                        
+                        if 'event' not in raw_data:
+                            logger.warning(f"Received message without 'event' field: {raw_data}")
+                            continue
+                        
+                        data = raw_data['event']
                         event_type = data.get('e')
 
                         if event_type == 'outboundAccountPosition':
