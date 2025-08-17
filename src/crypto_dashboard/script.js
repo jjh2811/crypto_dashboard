@@ -5,6 +5,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const totalValueElement = document.getElementById("total-value");
     const ordersContainer = document.getElementById("orders-container");
     const logsContainer = document.getElementById("logs-container");
+    const referenceTimeContainer = document.getElementById("reference-time-container");
+    const referenceTimeElement = document.getElementById("reference-time");
     let currentPrices = {};
     let cachedOrders = [];
     const modal = document.getElementById("details-modal");
@@ -100,7 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     messageText += ` - ${logData.message}`;
                 }
                 if (logData.side) {
-                    messageText += ` (${logData.side})`;
+                    messageText += ` (${logData.side})`
                 }
                 if (logData.price) {
                     messageText += ` | Price: ${parseFloat(logData.price.toPrecision(8))}`;
@@ -117,6 +119,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 logElement.textContent = messageText;
                 logsContainer.insertBefore(logElement, logsContainer.firstChild);
+            } else if (data.type === 'reference_price_info') {
+                updateReferencePriceInfo(data.time);
             } else {
                 // 'free' 또는 'amount' 키가 존재하면 보유 자산 정보로 간주하고 카드 업데이트
                 if (data.free !== undefined || data.amount !== undefined) {
@@ -239,7 +243,7 @@ document.addEventListener("DOMContentLoaded", () => {
             avgBuyPriceHtml = `
                 <div class="info-row">
                     <span class="info-label">Avg. Price:</span>
-                    <span class="info-value">$${parseFloat(avg_buy_price.toPrecision(8))}</span>
+                    <span class="info-value">${parseFloat(avg_buy_price.toPrecision(8))}</span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">P/L:</span>
@@ -248,16 +252,23 @@ document.addEventListener("DOMContentLoaded", () => {
             `;
         }
 
+        let priceChangeSpan = '';
+        if (data.price_change_percent !== undefined) {
+            const change = parseFloat(data.price_change_percent);
+            const changeClass = change >= 0 ? 'profit-positive' : 'profit-negative';
+            priceChangeSpan = ` <span class="${changeClass}">(${change.toFixed(2)}%)</span>`;
+        }
+
         return `
             <h2>${symbol}</h2>
             <div class="info-row">
                 <span class="info-label">Price:</span>
-                <span class="info-value">$${parseFloat(price.toPrecision(8))}</span>
+                <span class="info-value">${parseFloat(price.toPrecision(8))}${priceChangeSpan}</span>
             </div>
             ${avgBuyPriceHtml}
             <div class="info-row value" data-value="${value.toFixed(2)}">
                 <span class="info-label">Value:</span>
-                <span class="info-value">$${value.toFixed(2)}</span>
+                <span class="info-value">${value.toFixed(2)}</span>
             </div>
         `;
     }
@@ -303,6 +314,16 @@ document.addEventListener("DOMContentLoaded", () => {
         
         modal.style.display = "block";
     }
+
+    function updateReferencePriceInfo(time) {
+        if (time) {
+            const date = new Date(time);
+            referenceTimeElement.textContent = date.toLocaleString();
+            // referenceTimeContainer.style.display = 'block'; // 숨김 처리
+        } else {
+            referenceTimeContainer.style.display = 'none';
+        }
+    }
 });
 
 function openTab(evt, tabName) {
@@ -318,3 +339,8 @@ function openTab(evt, tabName) {
     document.getElementById(tabName).style.display = "block";
     evt.currentTarget.className += " active";
 }
+
+// Set default tab
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelector(".tab-button").click();
+});

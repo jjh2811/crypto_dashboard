@@ -22,6 +22,8 @@ clients = set()
 balances_cache = {}
 orders_cache = {}
 log_cache = []
+reference_prices = {}
+reference_time = None
 
 async def broadcast_message(message):
     """모든 연결된 클라이언트에게 메시지를 전송합니다."""
@@ -56,7 +58,7 @@ def create_balance_update_message(symbol, balance_data):
     value = price * total_amount
     avg_buy_price = balance_data.get('avg_buy_price')
 
-    return {
+    message = {
         'symbol': symbol,
         'price': float(price),
         'free': float(free_amount),
@@ -66,7 +68,17 @@ def create_balance_update_message(symbol, balance_data):
         'quote_currency': 'USDT'
     }
 
+    if reference_prices and symbol in reference_prices:
+        ref_price = Decimal(str(reference_prices[symbol]))
+        if ref_price > 0:
+            price_change_percent = (price - ref_price) / ref_price * 100
+            message['price_change_percent'] = float(price_change_percent)
+            message['reference_time'] = reference_time
+    
+    return message
+
 async def handle_websocket(request):
+    global reference_prices, reference_time
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
@@ -75,6 +87,12 @@ async def handle_websocket(request):
     logger.info(f"Total clients: {len(clients)}")
 
     try:
+        if reference_prices and reference_time:
+            await ws.send_json({
+                'type': 'reference_price_info',
+                'time': reference_time
+            })
+
         if balances_cache:
             for symbol, data in balances_cache.items():
                 update_message = create_balance_update_message(symbol, data)
@@ -126,6 +144,15 @@ async def handle_websocket(request):
     finally:
         clients.discard(ws)
         logger.info(f"Client disconnected. Total clients: {len(clients)}")
+        if not clients:
+            logger.info("Last client disconnected. Storing current prices as reference.")
+            reference_prices = {symbol: data['price'] for symbol, data in balances_cache.items() if 'price' in data and symbol != 'USDT'}
+            if reference_prices:
+                reference_time = datetime.now(timezone.utc).isoformat()
+                logger.info(f"Reference prices saved at {reference_time} for {list(reference_prices.keys())}")
+            else:
+                reference_time = None
+                logger.info("No assets to track for reference pricing.")
     return ws
 
 async def http_handler(request):
