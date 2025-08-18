@@ -124,7 +124,7 @@ class BinanceExchange:
                 logger.info(f"Testnet mode: Filtering balances with whitelist {self.whitelist}. Kept: {list(total_balances.keys())} from {original_assets}")
 
             for asset, total_amount in total_balances.items():
-                avg_buy_price = await self.calculate_average_buy_price(asset, Decimal(str(total_amount)))
+                avg_buy_price, realised_pnl = await self.calculate_average_buy_price(asset, Decimal(str(total_amount)))
                 free_amount = Decimal(str(balance.get('free', {}).get(asset, 0)))
                 locked_amount = Decimal(str(balance.get('used', {}).get(asset, 0)))
                 self.balances_cache[asset] = {
@@ -132,24 +132,25 @@ class BinanceExchange:
                     'locked': locked_amount,
                     'total_amount': free_amount + locked_amount,
                     'price': Decimal('1.0') if asset == 'USDT' else Decimal('0'),
-                    'avg_buy_price': avg_buy_price
+                    'avg_buy_price': avg_buy_price,
+                    'realised_pnl': realised_pnl
                 }
-                logger.info(f"Asset: {asset}, Avg Buy Price: {avg_buy_price if avg_buy_price is not None else 'N/A'}")
+                logger.info(f"Asset: {asset}, Avg Buy Price: {avg_buy_price if avg_buy_price is not None else 'N/A'}, Realised PnL: {realised_pnl}")
 
         except Exception as e:
             logger.error(f"Failed to fetch initial data from Binance: {e}")
             await self.exchange.close()
             raise
 
-    async def calculate_average_buy_price(self, asset: str, current_amount: Decimal) -> Optional[Decimal]:
+    async def calculate_average_buy_price(self, asset: str, current_amount: Decimal) -> tuple[Optional[Decimal], Optional[Decimal]]:
         if asset == 'USDT' or current_amount <= 0:
-            return None
+            return None, None
 
         symbol = f"{asset}/USDT"
         try:
             trade_history = await self.exchange.fetch_closed_orders(symbol=symbol)
             if not trade_history:
-                return None
+                return None, None
 
             sorted_trades = sorted(trade_history, key=lambda x: x.get('timestamp', 0))
 
@@ -171,27 +172,38 @@ class BinanceExchange:
                     break
 
             if start_index == -1:
-                return None
+                return None, None
 
             total_cost = Decimal('0')
             total_amount_bought = Decimal('0')
-
+            realised_pnl = Decimal('0')
+            
             for i in range(start_index, len(sorted_trades)):
                 trade = sorted_trades[i]
-                if trade.get('side') == 'buy':
-                    filled = Decimal(str(trade.get('filled', '0')))
-                    price = Decimal(str(trade.get('price', '0')))
+                side = trade.get('side')
+                filled = Decimal(str(trade.get('filled', '0')))
+                price = Decimal(str(trade.get('price', '0')))
+
+                if side == 'buy':
                     total_cost += filled * price
                     total_amount_bought += filled
+                elif side == 'sell':
+                    avg_buy_price = total_cost / total_amount_bought if total_amount_bought > 0 else Decimal('0')
+                    if avg_buy_price > 0:
+                        realised_pnl += (price - avg_buy_price) * filled
+                        total_cost -= avg_buy_price * filled
+                        total_amount_bought -= filled
+
 
             if total_amount_bought > Decimal('0'):
-                return total_cost / total_amount_bought
+                avg_buy_price = total_cost / total_amount_bought
+                return avg_buy_price, realised_pnl
 
-            return None
+            return None, realised_pnl
 
         except Exception as e:
             logger.error(f"Error calculating average buy price for {asset}: {e}", exc_info=True)
-            return None
+            return None, None
 
     async def _logon(self, wscp: WebSocketClientProtocol) -> None:
         try:
@@ -356,7 +368,9 @@ class BinanceExchange:
                                     if has_changed:
                                         logger.info(f"Balance for {asset} updated. Free: {free_amount}, Locked: {locked_amount}")
                                         if 'avg_buy_price' not in self.balances_cache[asset]:
-                                             self.balances_cache[asset]['avg_buy_price'] = await self.calculate_average_buy_price(asset, total_amount)
+                                             avg_buy_price, realised_pnl = await self.calculate_average_buy_price(asset, total_amount)
+                                             self.balances_cache[asset]['avg_buy_price'] = avg_buy_price
+                                             self.balances_cache[asset]['realised_pnl'] = realised_pnl
 
                                         update_message = self.app['create_balance_update_message'](asset, self.balances_cache[asset])
                                         await self.app['broadcast_message'](update_message)

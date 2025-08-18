@@ -57,6 +57,11 @@ def create_balance_update_message(symbol, balance_data):
     total_amount = free_amount + locked_amount
     value = price * total_amount
     avg_buy_price = balance_data.get('avg_buy_price')
+    realised_pnl = balance_data.get('realised_pnl')
+
+    unrealised_pnl = None
+    if avg_buy_price is not None and price > 0:
+        unrealised_pnl = (price - avg_buy_price) * total_amount
 
     message = {
         'symbol': symbol,
@@ -65,6 +70,8 @@ def create_balance_update_message(symbol, balance_data):
         'locked': float(locked_amount),
         'value': float(value),
         'avg_buy_price': float(avg_buy_price) if avg_buy_price is not None else None,
+        'realised_pnl': float(realised_pnl) if realised_pnl is not None else None,
+        'unrealised_pnl': float(unrealised_pnl) if unrealised_pnl is not None else None,
         'quote_currency': 'USDT'
     }
 

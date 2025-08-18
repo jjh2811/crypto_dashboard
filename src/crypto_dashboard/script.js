@@ -128,6 +128,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 } else {
                     // 그렇지 않으면 가격 정보로 간주
                     currentPrices[data.symbol] = parseFloat(data.price);
+                    updateModalUnrealisedPnL(data.symbol, data.price);
                 }
                 updatePriceDiffs(); // Update only price diffs on price changes
             }
@@ -158,6 +159,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         card.innerHTML = createCryptoCardHTML(data);
         updateTotalValue();
+
+        if (modal.style.display === "block" && document.getElementById("modal-crypto-name").textContent === symbol) {
+            openDetailsModal(card.dataset);
+        }
     }
 
     let totalValue = 0;
@@ -339,11 +344,23 @@ document.addEventListener("DOMContentLoaded", () => {
         const locked = parseFloat(dataset.locked || 0);
         const total = free + locked;
         const percentage = total > 0 ? ((free / total) * 100).toFixed(2) : 0;
+        const realised_pnl = parseFloat(dataset.realised_pnl);
+        const unrealised_pnl = parseFloat(dataset.unrealised_pnl);
 
         const balanceDetailsContainer = document.getElementById("modal-crypto-balance-details");
         balanceDetailsContainer.innerHTML = `
-            <span class="info-label">Free:</span>
-            <span class="info-value">${parseFloat(free.toFixed(8))} / ${parseFloat(total.toFixed(8))} (${percentage}%)</span>
+            <div class="info-row">
+                <span class="info-label">Free:</span>
+                <span class="info-value">${parseFloat(free.toFixed(8))} / ${parseFloat(total.toFixed(8))} (${percentage}%)</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Unrealised PnL:</span>
+                <span class="info-value ${unrealised_pnl >= 0 ? 'profit-positive' : 'profit-negative'}">${unrealised_pnl ? unrealised_pnl.toFixed(3) : '-'}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Realised PnL:</span>
+                <span class="info-value ${realised_pnl >= 0 ? 'profit-positive' : 'profit-negative'}">${realised_pnl ? realised_pnl.toFixed(3) : '-'}</span>
+            </div>
         `;
         
         modal.style.display = "block";
@@ -356,6 +373,26 @@ document.addEventListener("DOMContentLoaded", () => {
             // referenceTimeContainer.style.display = 'block'; // 숨김 처리
         } else {
             referenceTimeContainer.style.display = 'none';
+        }
+    }
+
+    function updateModalUnrealisedPnL(symbol, price) {
+        if (modal.style.display === "block" && document.getElementById("modal-crypto-name").textContent === symbol) {
+            const card = document.getElementById(symbol);
+            if (card) {
+                const avg_buy_price = parseFloat(card.dataset.avg_buy_price);
+                const free = parseFloat(card.dataset.free || 0);
+                const locked = parseFloat(card.dataset.locked || 0);
+                const totalAmount = free + locked;
+                if (avg_buy_price && totalAmount) {
+                    const unrealised_pnl = (price - avg_buy_price) * totalAmount;
+                    const pnlElement = modal.querySelector("#modal-crypto-balance-details .info-row:nth-child(2) .info-value");
+                    if (pnlElement) {
+                        pnlElement.textContent = unrealised_pnl.toFixed(3);
+                        pnlElement.className = `info-value ${unrealised_pnl >= 0 ? 'profit-positive' : 'profit-negative'}`;
+                    }
+                }
+            }
         }
     }
 });

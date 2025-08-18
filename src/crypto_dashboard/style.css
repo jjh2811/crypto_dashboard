@@ -251,6 +251,23 @@ h1 {
     position: relative;
 }
 
+#modal-crypto-balance-details .info-row {
+    display: flex;
+    justify-content: space-between;
+    margin: 8px 0;
+    font-size: 1.1em;
+}
+
+#modal-crypto-balance-details .info-label {
+    color: #5f6368;
+    text-align: left;
+}
+
+#modal-crypto-balance-details .info-value {
+    font-weight: bold;
+    text-align: right;
+}
+
 .close-button {
     color: #aaa;
     position: absolute;
