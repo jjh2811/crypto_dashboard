@@ -165,7 +165,7 @@ document.addEventListener("DOMContentLoaded", () => {
         document.querySelectorAll('#crypto-container .crypto-card .value').forEach(el => {
             totalValue += parseFloat(el.dataset.value || 0);
         });
-        totalValueElement.textContent = `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        totalValueElement.textContent = `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`;
     }
 
     function updatePriceDiffs() {
@@ -182,7 +182,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const priceDiff = ((order.price - currentPrice) / currentPrice) * 100;
                 const diffClass = priceDiff >= 0 ? 'side-buy' : 'side-sell';
                 priceDiffElement.className = `price-diff ${diffClass}`;
-                priceDiffElement.textContent = `Diff: ${priceDiff.toFixed(2)}%`;
+                priceDiffElement.textContent = `Diff: ${priceDiff.toFixed(3)}%`;
             }
         });
     }
@@ -247,7 +247,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
                 <div class="info-row">
                     <span class="info-label">P/L:</span>
-                    <span class="info-value ${profitClass}">${profitPercent.toFixed(2)}%</span>
+                    <span class="info-value ${profitClass}">${profitPercent.toFixed(3)}%</span>
                 </div>
             `;
         }
@@ -256,7 +256,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (data.price_change_percent !== undefined) {
             const change = parseFloat(data.price_change_percent);
             const changeClass = change >= 0 ? 'profit-positive' : 'profit-negative';
-            priceChangeSpan = ` <span class="${changeClass}">(${change.toFixed(2)}%)</span>`;
+            priceChangeSpan = ` <span class="${changeClass}">(${change.toFixed(3)}%)</span>`;
         }
 
         return `
@@ -266,9 +266,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 <span class="info-value">${parseFloat(price.toPrecision(8))}${priceChangeSpan}</span>
             </div>
             ${avgBuyPriceHtml}
-            <div class="info-row value" data-value="${value.toFixed(2)}">
+            <div class="info-row value" data-value="${value.toFixed(3)}">
                 <span class="info-label">Value:</span>
-                <span class="info-value">${value.toFixed(2)}</span>
+                <span class="info-value">${value.toFixed(3)}</span>
             </div>
         `;
     }
@@ -282,7 +282,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (currentPrice) {
             const priceDiff = ((order.price - currentPrice) / currentPrice) * 100;
             const diffClass = priceDiff >= 0 ? 'side-buy' : 'side-sell';
-            priceDiffHtml = `<p class="price-diff ${diffClass}">Diff: ${priceDiff.toFixed(2)}%</p>`;
+            priceDiffHtml = `<p class="price-diff ${diffClass}">Diff: ${priceDiff.toFixed(3)}%</p>`;
         }
 
         return `
@@ -294,7 +294,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <p class="price">Price: ${parseFloat(order.price)}</p>
             ${priceDiffHtml}
             <p class="amount">Amount: ${order.amount}</p>
-            <p class="value">Value: $${parseFloat(order.value).toFixed(2)}</p>
+            <p class="value">Value: $${parseFloat(order.value).toFixed(3)}</p>
             <p class="date">${orderDate}</p>
         `;
     }
@@ -304,7 +304,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const free = parseFloat(dataset.free || 0);
         const locked = parseFloat(dataset.locked || 0);
         const total = free + locked;
-        const percentage = total > 0 ? ((free / total) * 100).toFixed(2) : 0;
+        const percentage = total > 0 ? ((free / total) * 100).toFixed(3) : 0;
 
         const balanceDetailsContainer = document.getElementById("modal-crypto-balance-details");
         balanceDetailsContainer.innerHTML = `
