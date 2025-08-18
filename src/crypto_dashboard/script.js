@@ -253,10 +253,11 @@ document.addEventListener("DOMContentLoaded", () => {
         // toFixed(8)로 정밀도를 유지한 뒤 parseFloat으로 불필요한 0을 제거합니다.
         const lockedAmountHtml = locked > 1e-8 ? `<p class="locked">Locked: ${parseFloat(locked.toFixed(8))}</p>` : '';
         
-        let avgBuyPriceHtml = '<p class="avg-buy-price">-</p>';
-        if (data.avg_buy_price) {
+        let avgBuyPriceHtml;
+        if (data.avg_buy_price && Number.isFinite(parseFloat(data.avg_buy_price))) {
             const avg_buy_price = parseFloat(data.avg_buy_price);
-            const profitPercent = ((price - avg_buy_price) / avg_buy_price) * 100;
+            const price = Number.isFinite(parseFloat(data.price)) ? parseFloat(data.price) : 0;
+            const profitPercent = avg_buy_price > 0 ? ((price - avg_buy_price) / avg_buy_price) * 100 : 0;
             const profitClass = profitPercent >= 0 ? 'profit-positive' : 'profit-negative';
             avgBuyPriceHtml = `
                 <div class="info-row">
@@ -266,6 +267,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="info-row">
                     <span class="info-label">P/L:</span>
                     <span class="info-value ${profitClass}">${profitPercent.toFixed(3)}%</span>
+                </div>
+            `;
+        } else {
+            avgBuyPriceHtml = `
+                <div class="info-row">
+                    <span class="info-label">Avg. Price:</span>
+                    <span class="info-value">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">P/L:</span>
+                    <span class="info-value">-</span>
                 </div>
             `;
         }
