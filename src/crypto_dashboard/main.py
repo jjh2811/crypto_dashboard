@@ -176,15 +176,30 @@ async def on_startup(app):
     app['subscription_lock'] = asyncio.Lock()
 
     try:
+        config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+        with open(config_path) as f:
+            config = json.load(f)
+        
+        testnet = config.get('binance', {}).get('testnet', False)
+
         secrets_path = os.path.join(os.path.dirname(__file__), 'secrets.json')
         with open(secrets_path) as f:
             secrets = json.load(f)
-        api_key = secrets['exchanges']['binance']['api_key']
-        secret_key = secrets['exchanges']['binance']['secret_key']
-        
-        if "YOUR_BINANCE" in api_key or "YOUR_BINANCE" in secret_key:
-            logger.warning("Please replace placeholder keys in secrets.json with your actual Binance API keys.")
-            return
+
+        if testnet:
+            logger.info("Connecting to Binance Testnet.")
+            api_key = secrets['exchanges']['binance_testnet']['api_key']
+            secret_key = secrets['exchanges']['binance_testnet']['secret_key']
+            if "YOUR_BINANCE_TESTNET" in api_key or "YOUR_BINANCE_TESTNET" in secret_key:
+                logger.warning("Please replace placeholder keys in secrets.json with your actual Binance Testnet API keys.")
+                return
+        else:
+            logger.info("Connecting to Binance Mainnet.")
+            api_key = secrets['exchanges']['binance']['api_key']
+            secret_key = secrets['exchanges']['binance']['secret_key']
+            if "YOUR_BINANCE" in api_key or "YOUR_BINANCE" in secret_key:
+                logger.warning("Please replace placeholder keys in secrets.json with your actual Binance API keys.")
+                return
 
         exchange = BinanceExchange(api_key, secret_key, app)
         app['exchange'] = exchange

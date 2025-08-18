@@ -60,8 +60,17 @@ class BinanceExchange:
     def __init__(self, api_key: str, secret_key: str, app: web.Application) -> None:
         with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
             config = json.load(f)
-        self.price_ws_url = config['binance']['price_ws_url']
-        self.user_data_ws_url = config['binance']['user_data_ws_url']
+        
+        binance_config = config['binance']
+        self.testnet = binance_config.get('testnet', False)
+        self.whitelist = binance_config.get('testnet_whitelist', []) if self.testnet else []
+
+        if self.testnet:
+            self.price_ws_url = binance_config['testnet_price_ws_url']
+            self.user_data_ws_url = binance_config['testnet_user_data_ws_url']
+        else:
+            self.price_ws_url = binance_config['price_ws_url']
+            self.user_data_ws_url = binance_config['user_data_ws_url']
 
         self._exchange = binance({
             'apiKey': api_key,
@@ -72,6 +81,10 @@ class BinanceExchange:
                 'warnOnFetchOpenOrdersWithoutSymbol': False,
             },
         })
+
+        if self.testnet:
+            self._exchange.set_sandbox_mode(True)
+
         self.app = app
         self.balances_cache: Dict[str, Dict[str, Any]] = app['balances_cache']
         self.orders_cache: Dict[str, Dict[str, Any]] = app['orders_cache']
@@ -102,6 +115,14 @@ class BinanceExchange:
             total_balances = {
                 asset: total for asset, total in balance.get('total', {}).items() if total > 0
             }
+
+            if self.testnet:
+                original_assets = list(total_balances.keys())
+                total_balances = {
+                    asset: total for asset, total in total_balances.items() if asset in self.whitelist
+                }
+                logger.info(f"Testnet mode: Filtering balances with whitelist {self.whitelist}. Kept: {list(total_balances.keys())} from {original_assets}")
+
             for asset, total_amount in total_balances.items():
                 avg_buy_price = await self.calculate_average_buy_price(asset, Decimal(str(total_amount)))
                 free_amount = Decimal(str(balance.get('free', {}).get(asset, 0)))
@@ -308,6 +329,10 @@ class BinanceExchange:
                                 asset = balance_update.get('a')
                                 if not asset:
                                     continue
+
+                                if self.testnet and asset not in self.whitelist:
+                                    continue
+
                                 free_amount = Decimal(balance_update.get('f', '0'))
                                 locked_amount = Decimal(balance_update.get('l', '0'))
                                 total_amount = free_amount + locked_amount
