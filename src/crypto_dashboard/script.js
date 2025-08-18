@@ -160,12 +160,30 @@ document.addEventListener("DOMContentLoaded", () => {
         updateTotalValue();
     }
 
+    let totalValue = 0;
+
     function updateTotalValue() {
-        let totalValue = 0;
+        totalValue = 0;
         document.querySelectorAll('#crypto-container .crypto-card .value').forEach(el => {
             totalValue += parseFloat(el.dataset.value || 0);
         });
         totalValueElement.textContent = `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`;
+        updateShares();
+    }
+
+    function updateShares() {
+        if (totalValue === 0) return;
+
+        document.querySelectorAll('#crypto-container .crypto-card').forEach(card => {
+            const valueElement = card.querySelector('.value');
+            const shareElement = card.querySelector('.share .info-value');
+
+            if (valueElement && shareElement) {
+                const cardValue = parseFloat(valueElement.dataset.value || 0);
+                const share = (cardValue / totalValue) * 100;
+                shareElement.textContent = `${share.toFixed(2)}%`;
+            }
+        });
     }
 
     function updatePriceDiffs() {
@@ -269,6 +287,10 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="info-row value" data-value="${value.toFixed(3)}">
                 <span class="info-label">Value:</span>
                 <span class="info-value">${value.toFixed(3)}</span>
+            </div>
+            <div class="info-row share">
+                <span class="info-label">Share:</span>
+                <span class="info-value">-</span>
             </div>
         `;
     }
