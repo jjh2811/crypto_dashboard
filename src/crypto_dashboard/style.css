@@ -294,10 +294,10 @@ h1 {
     font-weight: bold;
 }
 
-.crypto-card .profit-positive {
+.profit-positive {
     color: #28a745;
 }
 
-.crypto-card .profit-negative {
+.profit-negative {
     color: #dc3545;
 }

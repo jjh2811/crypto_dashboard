@@ -355,11 +355,11 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="info-row">
                 <span class="info-label">Unrealised PnL:</span>
-                <span class="info-value ${unrealised_pnl >= 0 ? 'profit-positive' : 'profit-negative'}">${unrealised_pnl ? unrealised_pnl.toFixed(3) : '-'}</span>
+                <span class="info-value ${unrealised_pnl >= 0 ? 'profit-positive' : 'profit-negative'}">${unrealised_pnl ? (unrealised_pnl > 0 ? '+' : '') + unrealised_pnl.toFixed(3) : '-'}</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Realised PnL:</span>
-                <span class="info-value ${realised_pnl >= 0 ? 'profit-positive' : 'profit-negative'}">${realised_pnl ? realised_pnl.toFixed(3) : '-'}</span>
+                <span class="info-value ${realised_pnl >= 0 ? 'profit-positive' : 'profit-negative'}">${realised_pnl ? (realised_pnl > 0 ? '+' : '') + realised_pnl.toFixed(3) : '-'}</span>
             </div>
         `;
         
@@ -388,7 +388,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const unrealised_pnl = (price - avg_buy_price) * totalAmount;
                     const pnlElement = modal.querySelector("#modal-crypto-balance-details .info-row:nth-child(2) .info-value");
                     if (pnlElement) {
-                        pnlElement.textContent = unrealised_pnl.toFixed(3);
+                        pnlElement.textContent = (unrealised_pnl > 0 ? '+' : '') + unrealised_pnl.toFixed(3);
                         pnlElement.className = `info-value ${unrealised_pnl >= 0 ? 'profit-positive' : 'profit-negative'}`;
                     }
                 }
