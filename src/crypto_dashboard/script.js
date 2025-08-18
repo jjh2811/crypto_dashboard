@@ -266,7 +266,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
                 <div class="info-row">
                     <span class="info-label">P/L:</span>
-                    <span class="info-value ${profitClass}">${profitPercent.toFixed(3)}%</span>
+                    <span class="info-value ${profitClass}">${profitPercent.toFixed(2)}%</span>
                 </div>
             `;
         } else {
@@ -286,7 +286,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (data.price_change_percent !== undefined) {
             const change = parseFloat(data.price_change_percent);
             const changeClass = change >= 0 ? 'profit-positive' : 'profit-negative';
-            priceChangeSpan = ` <span class="${changeClass}">(${change.toFixed(3)}%)</span>`;
+            priceChangeSpan = ` <span class="${changeClass}">(${change.toFixed(2)}%)</span>`;
         }
 
         return `
@@ -316,7 +316,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (currentPrice) {
             const priceDiff = ((order.price - currentPrice) / currentPrice) * 100;
             const diffClass = priceDiff >= 0 ? 'side-buy' : 'side-sell';
-            priceDiffHtml = `<p class="price-diff ${diffClass}">Diff: ${priceDiff.toFixed(3)}%</p>`;
+            priceDiffHtml = `<p class="price-diff ${diffClass}">Diff: ${priceDiff.toFixed(2)}%</p>`;
         }
 
         return `
@@ -338,7 +338,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const free = parseFloat(dataset.free || 0);
         const locked = parseFloat(dataset.locked || 0);
         const total = free + locked;
-        const percentage = total > 0 ? ((free / total) * 100).toFixed(3) : 0;
+        const percentage = total > 0 ? ((free / total) * 100).toFixed(2) : 0;
 
         const balanceDetailsContainer = document.getElementById("modal-crypto-balance-details");
         balanceDetailsContainer.innerHTML = `
