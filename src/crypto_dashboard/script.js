@@ -138,7 +138,19 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     websocket.onopen = () => console.log("WebSocket connection established");
-    websocket.onerror = (error) => console.error("WebSocket error:", error);
+    websocket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+    };
+    websocket.onclose = (event) => {
+        console.log("WebSocket connection closed:", event.code, event.reason);
+        // 1008 is the "Policy Violation" status code, which we used for authentication failure
+        if (event.code === 1008) {
+            alert("세션이 만료되었거나 인증에 실패했습니다. 다시 로그인해주세요.");
+            window.location.href = "/login";
+        } else {
+            console.error("WebSocket closed with code:", event.code, "reason:", event.reason);
+        }
+    };
 
     function updateCryptoCard(data) {
         const { symbol, price } = data;

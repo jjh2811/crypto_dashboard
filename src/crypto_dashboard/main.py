@@ -5,8 +5,13 @@ import json
 import logging
 from datetime import datetime, timezone
 from aiohttp import web
+import secrets
 
 from .binance import BinanceExchange
+
+
+SECRET_TOKEN = secrets.token_hex(32)
+
 
 # 로깅 설정
 log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -84,7 +89,91 @@ def create_balance_update_message(symbol, balance_data):
     
     return message
 
+async def login(request):
+    """POST 요청 + 비밀번호 입력 후 쿠키 발급"""
+    if request.method != "POST":
+        # 비밀번호 입력 폼 제공
+        return web.Response(text="""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Login</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f0f2f5; }
+                    form { background: white; padding: 2em; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; }
+                    input[type="password"] {
+                        padding: 12px;
+                        font-size: 16px;
+                        width: 250px;
+                        margin-bottom: 15px;
+                        border: 1px solid #ccc;
+                        border-radius: 5px;
+                    }
+                    button {
+                        padding: 12px 20px;
+                        font-size: 16px;
+                        width: 100%;
+                        background-color: #007bff;
+                        color: white;
+                        border: none;
+                        border-radius: 5px;
+                        cursor: pointer;
+                    }
+                    button:hover { background-color: #0056b3; }
+                </style>
+            </head>
+            <body>
+                <form method="post">
+                    <input type="password" name="password" placeholder="Password" required>
+                    <button type="submit">Login</button>
+                </form>
+            </body>
+            </html>
+        """, content_type="text/html")
+
+    data = await request.post()
+    password = data.get("password", "")
+    if password != request.app['login_password']:
+        return web.Response(text="비밀번호가 틀렸습니다.", status=401)
+
+    resp = web.HTTPFound('/')
+    # 쿠키 설정 (만료 없음)
+    resp.set_cookie(
+        "auth_token",
+        SECRET_TOKEN,
+        httponly=True,       # JS 접근 불가
+        secure=True,         # HTTPS 환경에서만 전송
+        samesite="Strict"    # CSRF 방지
+    )
+    return resp
+
+async def logout(request):
+    """쿠키 삭제로 로그아웃"""
+    resp = web.HTTPFound('/login')
+    resp.del_cookie("auth_token")
+    return resp
+
+@web.middleware
+async def auth_middleware(request, handler):
+    # 로그인/로그아웃 페이지 및 정적 파일은 예외
+    if request.path in ("/login", "/logout", "/style.css", "/script.js"):
+        return await handler(request)
+
+    token = request.cookies.get("auth_token")
+    if token != SECRET_TOKEN:
+        return web.HTTPFound('/login')
+    return await handler(request)
+
+
 async def handle_websocket(request):
+    token = request.cookies.get("auth_token")
+    if token != SECRET_TOKEN:
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+        await ws.close(code=1008, message=b'Authentication failed')
+        return ws
+
     global reference_prices, reference_time
     ws = web.WebSocketResponse()
     await ws.prepare(request)
@@ -191,19 +280,25 @@ async def on_startup(app):
 
         secrets_path = os.path.join(os.path.dirname(__file__), 'secrets.json')
         with open(secrets_path) as f:
-            secrets = json.load(f)
+            secrets_data = json.load(f)
+        
+        login_password = secrets_data.get('login_password')
+        if not login_password:
+            logger.error("Login password not found in secrets.json under 'login_password' key. Please add it.")
+            return # Exit startup if password is not found
+        app['login_password'] = login_password
 
         if testnet:
             logger.info("Connecting to Binance Testnet.")
-            api_key = secrets['exchanges']['binance_testnet']['api_key']
-            secret_key = secrets['exchanges']['binance_testnet']['secret_key']
+            api_key = secrets_data['exchanges']['binance_testnet']['api_key']
+            secret_key = secrets_data['exchanges']['binance_testnet']['secret_key']
             if "YOUR_BINANCE_TESTNET" in api_key or "YOUR_BINANCE_TESTNET" in secret_key:
                 logger.warning("Please replace placeholder keys in secrets.json with your actual Binance Testnet API keys.")
                 return
         else:
             logger.info("Connecting to Binance Mainnet.")
-            api_key = secrets['exchanges']['binance']['api_key']
-            secret_key = secrets['exchanges']['binance']['secret_key']
+            api_key = secrets_data['exchanges']['binance']['api_key']
+            secret_key = secrets_data['exchanges']['binance']['secret_key']
             if "YOUR_BINANCE" in api_key or "YOUR_BINANCE" in secret_key:
                 logger.warning("Please replace placeholder keys in secrets.json with your actual Binance API keys.")
                 return
@@ -251,7 +346,7 @@ async def on_cleanup(app):
     logger.info("All background tasks stopped.")
 
 def init_app():
-    app = web.Application()
+    app = web.Application(middlewares=[auth_middleware])
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
     app.on_cleanup.append(on_cleanup)
@@ -259,6 +354,9 @@ def init_app():
     app.router.add_get('/ws', handle_websocket)
     app.router.add_get('/', http_handler)
     app.router.add_get('/{filename}', http_handler)
+    app.router.add_get('/login', login)
+    app.router.add_post('/login', login)
+    app.router.add_get('/logout', logout)
     return app
 
 def main():
