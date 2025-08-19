@@ -89,6 +89,7 @@ class BinanceExchange:
         self.balances_cache: Dict[str, Dict[str, Any]] = app['balances_cache']
         self.orders_cache: Dict[str, Dict[str, Any]] = app['orders_cache']
         self.wscp: Optional[WebSocketClientProtocol] = None
+        self._ws_id_counter = 1
 
     @property
     def exchange(self) -> ExchangeProtocol:
@@ -481,9 +482,11 @@ class BinanceExchange:
                 if not assets:
                     return
                 streams = [f"{asset.lower()}usdt@miniTicker" for asset in assets]
-                message = json.dumps({"method": method, "params": streams, "id": int(asyncio.get_running_loop().time())})
+                request_id = self._ws_id_counter
+                self._ws_id_counter += 1
+                message = json.dumps({"method": method, "params": streams, "id": request_id})
                 await websocket.send(message)
-                logger.info(f"Sent {method} for: {streams}")
+                logger.info(f"Sent {method} for: {streams} with ID: {request_id}")
 
             holding_assets = set(self.balances_cache.keys())
             order_assets = {order.get('symbol', '').replace('USDT', '').replace('/', '') for order in self.orders_cache.values()}
