@@ -301,3 +301,7 @@ h1 {
 .profit-negative {
     color: #dc3545;
 }
+
+.profit-neutral {
+    color: #333;
+}

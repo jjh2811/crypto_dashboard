@@ -348,6 +348,16 @@ document.addEventListener("DOMContentLoaded", () => {
         const unrealised_pnl = parseFloat(dataset.unrealised_pnl);
 
         const balanceDetailsContainer = document.getElementById("modal-crypto-balance-details");
+        
+        const formatPnl = (pnl) => {
+            if (isNaN(pnl)) {
+                return '<span class="info-value profit-neutral">-</span>';
+            }
+            const pnlClass = pnl >= 0 ? 'profit-positive' : 'profit-negative';
+            const pnlSign = pnl > 0 ? '+' : '';
+            return `<span class="info-value ${pnlClass}">${pnlSign}${pnl.toFixed(3)}</span>`;
+        };
+
         balanceDetailsContainer.innerHTML = `
             <div class="info-row">
                 <span class="info-label">Free:</span>
@@ -355,11 +365,11 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="info-row">
                 <span class="info-label">Unrealised PnL:</span>
-                <span class="info-value ${unrealised_pnl >= 0 ? 'profit-positive' : 'profit-negative'}">${unrealised_pnl ? (unrealised_pnl > 0 ? '+' : '') + unrealised_pnl.toFixed(3) : '-'}</span>
+                ${formatPnl(unrealised_pnl)}
             </div>
             <div class="info-row">
                 <span class="info-label">Realised PnL:</span>
-                <span class="info-value ${realised_pnl >= 0 ? 'profit-positive' : 'profit-negative'}">${realised_pnl ? (realised_pnl > 0 ? '+' : '') + realised_pnl.toFixed(3) : '-'}</span>
+                ${formatPnl(realised_pnl)}
             </div>
         `;
         
