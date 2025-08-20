@@ -30,6 +30,11 @@ log_cache = []
 reference_prices = {}
 reference_time = None
 
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_LOCKOUT_TIME = 600  # 10 minutes
+login_attempts = {}
+last_login_attempt = {}
+
 async def broadcast_message(message):
     """모든 연결된 클라이언트에게 메시지를 전송합니다."""
     for ws in list(clients):
@@ -91,29 +96,54 @@ def create_balance_update_message(symbol, balance_data):
 
 async def login(request):
     """POST 요청 + 비밀번호 입력 후 쿠키 발급"""
+    ip_address = request.transport.get_extra_info('peername')[0]
+    current_time = datetime.now(timezone.utc).timestamp()
+    error_message = ""
+    button_disabled = ""
+
+    login_path = os.path.join(os.path.dirname(__file__), 'login.html')
+    try:
+        with open(login_path, 'r') as f:
+            login_html = f.read()
+    except FileNotFoundError:
+        return web.Response(text="Login page not found.", status=404)
+
+    if ip_address in last_login_attempt and current_time - last_login_attempt[ip_address] < LOGIN_LOCKOUT_TIME:
+        if login_attempts.get(ip_address, 0) >= MAX_LOGIN_ATTEMPTS:
+            error_message = "너무 많은 로그인 시도를 했습니다. 잠시 후 다시 시도하세요."
+            button_disabled = "disabled"
+            return web.Response(text=login_html.replace("{{error_message}}", error_message).replace("{{button_disabled}}", button_disabled), status=429, content_type='text/html')
+
     if request.method == "POST":
         data = await request.post()
         password = data.get("password", "")
         if password != request.app['login_password']:
-            return web.Response(text="비밀번호가 틀렸습니다.", status=401)
+            login_attempts[ip_address] = login_attempts.get(ip_address, 0) + 1
+            last_login_attempt[ip_address] = current_time
+            if login_attempts[ip_address] >= MAX_LOGIN_ATTEMPTS:
+                error_message = "너무 많은 로그인 시도를 했습니다. 잠시 후 다시 시도하세요."
+                button_disabled = "disabled"
+                return web.Response(text=login_html.replace("{{error_message}}", error_message).replace("{{button_disabled}}", button_disabled), status=429, content_type='text/html')
+            else:
+                error_message = "비밀번호가 틀렸습니다."
+                return web.Response(text=login_html.replace("{{error_message}}", error_message).replace("{{button_disabled}}", ""), status=401, content_type='text/html')
+
+        login_attempts.pop(ip_address, None)
+        last_login_attempt.pop(ip_address, None)
 
         resp = web.HTTPFound('/')
-        # 쿠키 설정 (24시간)
         resp.set_cookie(
             "auth_token",
             SECRET_TOKEN,
-            httponly=True,       # JS 접근 불가
-            secure=True,         # HTTPS 환경에서만 전송
-            samesite="Strict",    # CSRF 방지
-            max_age=86400        # 24시간
+            httponly=True,
+            secure=True,
+            samesite="Strict",
+            max_age=86400
         )
         return resp
 
-    # GET 요청 시 login.html 제공
-    login_path = os.path.join(os.path.dirname(__file__), 'login.html')
-    if os.path.exists(login_path):
-        return web.FileResponse(login_path)
-    return web.Response(text="Login page not found.", status=404)
+    # GET request
+    return web.Response(text=login_html.replace("{{error_message}}", "").replace("{{button_disabled}}", ""), status=200, content_type='text/html')
 
 async def logout(request):
     """쿠키 삭제로 로그아웃"""
