@@ -282,7 +282,7 @@ async def on_startup(app):
         login_password = secrets_data.get('login_password')
         if not login_password:
             logger.error("Login password not found in secrets.json under 'login_password' key. Please add it.")
-            return # Exit startup if password is not found
+            os._exit(1)
         app['login_password'] = login_password
 
         if testnet:
