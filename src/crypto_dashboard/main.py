@@ -98,13 +98,14 @@ async def login(request):
             return web.Response(text="비밀번호가 틀렸습니다.", status=401)
 
         resp = web.HTTPFound('/')
-        # 쿠키 설정 (만료 없음)
+        # 쿠키 설정 (24시간)
         resp.set_cookie(
             "auth_token",
             SECRET_TOKEN,
             httponly=True,       # JS 접근 불가
             secure=True,         # HTTPS 환경에서만 전송
-            samesite="Strict"    # CSRF 방지
+            samesite="Strict",    # CSRF 방지
+            max_age=86400        # 24시간
         )
         return resp
 
