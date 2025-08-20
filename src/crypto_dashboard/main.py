@@ -91,62 +91,28 @@ def create_balance_update_message(symbol, balance_data):
 
 async def login(request):
     """POST 요청 + 비밀번호 입력 후 쿠키 발급"""
-    if request.method != "POST":
-        # 비밀번호 입력 폼 제공
-        return web.Response(text="""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Login</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f0f2f5; }
-                    form { background: white; padding: 2em; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; }
-                    input[type="password"] {
-                        padding: 12px;
-                        font-size: 16px;
-                        width: 250px;
-                        margin-bottom: 15px;
-                        border: 1px solid #ccc;
-                        border-radius: 5px;
-                    }
-                    button {
-                        padding: 12px 20px;
-                        font-size: 16px;
-                        width: 100%;
-                        background-color: #007bff;
-                        color: white;
-                        border: none;
-                        border-radius: 5px;
-                        cursor: pointer;
-                    }
-                    button:hover { background-color: #0056b3; }
-                </style>
-            </head>
-            <body>
-                <form method="post">
-                    <input type="password" name="password" placeholder="Password" required>
-                    <button type="submit">Login</button>
-                </form>
-            </body>
-            </html>
-        """, content_type="text/html")
+    if request.method == "POST":
+        data = await request.post()
+        password = data.get("password", "")
+        if password != request.app['login_password']:
+            return web.Response(text="비밀번호가 틀렸습니다.", status=401)
 
-    data = await request.post()
-    password = data.get("password", "")
-    if password != request.app['login_password']:
-        return web.Response(text="비밀번호가 틀렸습니다.", status=401)
+        resp = web.HTTPFound('/')
+        # 쿠키 설정 (만료 없음)
+        resp.set_cookie(
+            "auth_token",
+            SECRET_TOKEN,
+            httponly=True,       # JS 접근 불가
+            secure=True,         # HTTPS 환경에서만 전송
+            samesite="Strict"    # CSRF 방지
+        )
+        return resp
 
-    resp = web.HTTPFound('/')
-    # 쿠키 설정 (만료 없음)
-    resp.set_cookie(
-        "auth_token",
-        SECRET_TOKEN,
-        httponly=True,       # JS 접근 불가
-        secure=True,         # HTTPS 환경에서만 전송
-        samesite="Strict"    # CSRF 방지
-    )
-    return resp
+    # GET 요청 시 login.html 제공
+    login_path = os.path.join(os.path.dirname(__file__), 'login.html')
+    if os.path.exists(login_path):
+        return web.FileResponse(login_path)
+    return web.Response(text="Login page not found.", status=404)
 
 async def logout(request):
     """쿠키 삭제로 로그아웃"""
