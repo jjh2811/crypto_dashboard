@@ -7,11 +7,6 @@ body {
     padding-bottom: 80px; /* Add padding to prevent overlap with command bar */
 }
 
-h1 {
-    text-align: center;
-    color: #1a73e8;
-}
-
 /* Tab Styles */
 .tab-container {
     overflow: hidden;
@@ -174,18 +169,6 @@ h1 {
     font-weight: bold;
 }
 
-.crypto-card .price-diff.positive {
-    color: #28a745;
-}
-
-.crypto-card .price-diff.negative {
-    color: #dc3545;
-}
-
-.crypto-card .price-diff.neutral {
-    color: #6c757d;
-}
-
 .crypto-card .order-checkbox {
     float: left;
 }
@@ -215,13 +198,6 @@ h1 {
 .crypto-card .locked {
     font-size: 1.0em;
     color: #ff7f50; /* Coral color for locked amount */
-    margin: 5px 0;
-}
-
-.crypto-card .total-amount {
-    font-size: 1.1em;
-    font-weight: bold;
-    color: #5f6368;
     margin: 5px 0;
 }
 
@@ -284,16 +260,6 @@ h1 {
     cursor: pointer;
 }
 
-.crypto-card .avg-buy-price {
-    font-size: 1.1em;
-    color: #5f6368;
-    margin: 5px 0;
-}
-
-.crypto-card .profit {
-    font-weight: bold;
-}
-
 .profit-positive {
     color: #28a745;
 }
@@ -304,4 +270,39 @@ h1 {
 
 .profit-neutral {
     color: #333;
+}
+
+.modal-buttons {
+    margin-top: 20px;
+}
+
+.modal-buttons button {
+    padding: 10px 20px;
+    margin: 0 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+#confirm-yes-btn {
+    background-color: #dc3545;
+    color: white;
+}
+
+#confirm-no-btn {
+    background-color: #6c757d;
+    color: white;
+}
+
+#alert-ok-btn {
+    background-color: #1a73e8;
+    color: white;
+}
+
+
+#reference-time-container {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-top: 10px;
 }

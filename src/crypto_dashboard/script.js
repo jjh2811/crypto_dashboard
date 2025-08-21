@@ -12,6 +12,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const modal = document.getElementById("details-modal");
     const closeButton = document.querySelector(".close-button");
 
+    const confirmModal = document.getElementById("confirm-modal");
+    const confirmModalText = document.getElementById("confirm-modal-text");
+    const confirmYesBtn = document.getElementById("confirm-yes-btn");
+    const confirmNoBtn = document.getElementById("confirm-no-btn");
+    const alertModal = document.getElementById("alert-modal");
+    const alertModalText = document.getElementById("alert-modal-text");
+    const alertOkBtn = document.getElementById("alert-ok-btn");
+
     closeButton.onclick = () => {
         modal.style.display = "none";
     }
@@ -42,14 +50,27 @@ document.addEventListener("DOMContentLoaded", () => {
         if (selectedOrders.length > 0) {
             websocket.send(JSON.stringify({ type: 'cancel_orders', orders: selectedOrders }));
         } else {
-            alert("취소할 주문을 선택하세요.");
+            alertModalText.textContent = "취소할 주문을 선택하세요.";
+            alertModal.style.display = "block";
         }
     });
 
+    alertOkBtn.addEventListener("click", () => {
+        alertModal.style.display = "none";
+    });
+
     cancelAllBtn.addEventListener("click", () => {
-        if (confirm("모든 주문을 취소하시겠습니까?")) {
-            websocket.send(JSON.stringify({ type: 'cancel_all_orders' }));
-        }
+        confirmModalText.textContent = "모든 주문을 취소하시겠습니까?";
+        confirmModal.style.display = "block";
+    });
+
+    confirmYesBtn.addEventListener("click", () => {
+        websocket.send(JSON.stringify({ type: 'cancel_all_orders' }));
+        confirmModal.style.display = "none";
+    });
+
+    confirmNoBtn.addEventListener("click", () => {
+        confirmModal.style.display = "none";
     });
 
     ordersContainer.addEventListener('click', (event) => {
