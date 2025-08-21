@@ -65,6 +65,7 @@ class BinanceExchange:
         testnet_config = binance_config.get('testnet', {})
         self.testnet = testnet_config.get('use', False)
         self.whitelist = testnet_config.get('whitelist', []) if self.testnet else []
+        self.quote_currency = binance_config.get('quote_currency', 'USDT')
 
         if self.testnet:
             self.price_ws_url = testnet_config['price_ws_url']
@@ -109,7 +110,7 @@ class BinanceExchange:
                     self.orders_cache[order_id] = {
                         'id': order_id, 'symbol': order.get('symbol'), 'side': order.get('side'),
                         'price': float(price), 'amount': float(amount), 'value': float(price * amount),
-                        'quote_currency': order.get('symbol', '').split('/')[1] if order.get('symbol') and '/' in order.get('symbol', '') else 'USDT',
+                        'quote_currency': order.get('symbol', '').split('/')[1] if order.get('symbol') and '/' in order.get('symbol', '') else self.quote_currency,
                         'timestamp': order.get('timestamp'), 'status': order.get('status')
                     }
             logger.info(f"Fetched {len(open_orders)} open orders at startup.")
@@ -133,7 +134,7 @@ class BinanceExchange:
                     'free': free_amount,
                     'locked': locked_amount,
                     'total_amount': free_amount + locked_amount,
-                    'price': Decimal('1.0') if asset == 'USDT' else Decimal('0'),
+                    'price': Decimal('1.0') if asset == self.quote_currency else Decimal('0'),
                     'avg_buy_price': avg_buy_price,
                     'realised_pnl': realised_pnl
                 }
@@ -145,10 +146,10 @@ class BinanceExchange:
             raise
 
     async def calculate_average_buy_price(self, asset: str, current_amount: Decimal) -> tuple[Optional[Decimal], Optional[Decimal]]:
-        if asset == 'USDT' or current_amount <= 0:
+        if asset == self.quote_currency or current_amount <= 0:
             return None, None
 
-        symbol = f"{asset}/USDT"
+        symbol = f"{asset}/{self.quote_currency}"
         try:
             trade_history = await self.exchange.fetch_closed_orders(symbol=symbol)
             if not trade_history:
@@ -268,7 +269,7 @@ class BinanceExchange:
                     async for message in websocket:
                         data = json.loads(message)
                         if data.get('e') == '24hrMiniTicker':
-                            symbol = data.get('s', '').replace('USDT', '')
+                            symbol = data.get('s', '').replace(self.quote_currency, '')
                             price = data.get('c')
                             if not symbol or not price:
                                 continue
@@ -278,7 +279,7 @@ class BinanceExchange:
                                 self.balances_cache[symbol]['price'] = Decimal(price)
                                 update_message = self.app['create_balance_update_message'](symbol, self.balances_cache[symbol])
                             else:
-                                update_message = {'symbol': symbol, 'price': float(Decimal(price)), 'quote_currency': 'USDT'}
+                                update_message = {'symbol': symbol, 'price': float(Decimal(price)), 'quote_currency': self.quote_currency}
 
                             await self.app['broadcast_message'](update_message)
                         elif 'result' in data and data.get('result') is None:
@@ -377,7 +378,7 @@ class BinanceExchange:
                                         update_message = self.app['create_balance_update_message'](asset, self.balances_cache[asset])
                                         await self.app['broadcast_message'](update_message)
 
-                                    if asset == 'USDT' and self.balances_cache[asset].get('price', 0) == 0:
+                                    if asset == self.quote_currency and self.balances_cache[asset].get('price', 0) == 0:
                                         self.balances_cache[asset]['price'] = 1.0
 
                                     if not is_existing:
@@ -431,7 +432,7 @@ class BinanceExchange:
                             await self.app['broadcast_orders_update']()
 
                             if status in ['PARTIALLY_FILLED', 'FILLED'] and data.get('S') == 'BUY':
-                                asset = symbol.replace('USDT', '')
+                                asset = symbol.replace(self.quote_currency, '')
                                 # 'l' is Last executed quantity, 'L' is Last executed price
                                 last_filled_quantity = Decimal(data.get('l', '0'))
                                 last_filled_price = Decimal(data.get('L', '0'))
@@ -490,7 +491,7 @@ class BinanceExchange:
                 logger.info(f"Sent {method} for: {streams} with ID: {request_id}")
 
             holding_assets = set(self.balances_cache.keys())
-            order_assets = {order.get('symbol', '').replace('USDT', '').replace('/', '') for order in self.orders_cache.values()}
+            order_assets = {order.get('symbol', '').replace(self.quote_currency, '').replace('/', '') for order in self.orders_cache.values()}
             required_assets = (holding_assets | order_assets)
 
             current_assets = self.app.get('tracked_assets', set())
@@ -498,8 +499,8 @@ class BinanceExchange:
             to_add = required_assets - current_assets
             to_remove = current_assets - required_assets
 
-            await send_subscription_message("SUBSCRIBE", [asset for asset in to_add if asset != 'USDT'])
-            await send_subscription_message("UNSUBSCRIBE", [asset for asset in to_remove if asset != 'USDT'])
+            await send_subscription_message("SUBSCRIBE", [asset for asset in to_add if asset != self.quote_currency])
+            await send_subscription_message("UNSUBSCRIBE", [asset for asset in to_remove if asset != self.quote_currency])
 
             self.app['tracked_assets'] = required_assets
             if to_add or to_remove:

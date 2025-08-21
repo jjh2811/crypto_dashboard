@@ -59,7 +59,7 @@ async def broadcast_log(message):
     logger.info(f"LOG: {message}")
     await broadcast_message(log_message)
 
-def create_balance_update_message(symbol, balance_data):
+def create_balance_update_message(app, symbol, balance_data):
     """잔고 정보로부터 클라이언트에게 보낼 업데이트 메시지를 생성합니다."""
     price = Decimal(str(balance_data.get('price', '0')))
     free_amount = balance_data.get('free', Decimal('0'))
@@ -82,7 +82,7 @@ def create_balance_update_message(symbol, balance_data):
         'avg_buy_price': float(avg_buy_price) if avg_buy_price is not None else None,
         'realised_pnl': float(realised_pnl) if realised_pnl is not None else None,
         'unrealised_pnl': float(unrealised_pnl) if unrealised_pnl is not None else None,
-        'quote_currency': 'USDT'
+        'quote_currency': app['quote_currency']
     }
 
     if reference_prices and symbol in reference_prices:
@@ -188,7 +188,7 @@ async def handle_websocket(request):
 
         if balances_cache:
             for symbol, data in balances_cache.items():
-                update_message = create_balance_update_message(symbol, data)
+                update_message = create_balance_update_message(request.app, symbol, data)
                 await ws.send_json(update_message)
         
         if orders_cache:
@@ -239,7 +239,7 @@ async def handle_websocket(request):
         logger.info(f"Client disconnected. Total clients: {len(clients)}")
         if not clients:
             logger.info("Last client disconnected. Storing current prices as reference.")
-            reference_prices = {symbol: data['price'] for symbol, data in balances_cache.items() if 'price' in data and symbol != 'USDT'}
+            reference_prices = {symbol: data['price'] for symbol, data in balances_cache.items() if 'price' in data and symbol != request.app['quote_currency']}
             if reference_prices:
                 reference_time = datetime.now(timezone.utc).isoformat()
                 logger.info(f"Reference prices saved at {reference_time} for {list(reference_prices.keys())}")
@@ -263,7 +263,7 @@ async def on_startup(app):
     app['broadcast_message'] = broadcast_message
     app['broadcast_orders_update'] = broadcast_orders_update
     app['broadcast_log'] = broadcast_log
-    app['create_balance_update_message'] = create_balance_update_message
+    app['create_balance_update_message'] = lambda symbol, data: create_balance_update_message(app, symbol, data)
     app['tracked_assets'] = set()
     app['price_ws_ready'] = asyncio.Event()
     app['subscription_lock'] = asyncio.Lock()
@@ -272,7 +272,7 @@ async def on_startup(app):
         config_path = os.path.join(os.path.dirname(__file__), 'config.json')
         with open(config_path) as f:
             config = json.load(f)
-        
+        app['quote_currency'] = config.get('binance', {}).get('quote_currency', 'USDT')
         testnet = config.get('binance', {}).get('testnet', {}).get('use', False)
 
         secrets_path = os.path.join(os.path.dirname(__file__), 'secrets.json')
@@ -312,7 +312,7 @@ async def on_startup(app):
         return
 
     holding_assets = set(balances_cache.keys())
-    order_assets = {o['symbol'].replace('USDT', '').replace('/', '') for o in orders_cache.values()}
+    order_assets = {o['symbol'].replace(app['quote_currency'], '').replace('/', '') for o in orders_cache.values()}
     app['tracked_assets'] = holding_assets | order_assets
 
     app['price_ws_task'] = asyncio.create_task(exchange.connect_price_ws())

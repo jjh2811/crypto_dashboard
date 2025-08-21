@@ -4,6 +4,7 @@
   "binance": {
     "price_ws_url": "wss://stream.binance.com:9443/ws",
     "user_data_ws_url": "wss://ws-api.binance.com:443/ws-api/v3",
+    "quote_currency": "USDT",
     "testnet": {
       "use": false,
       "price_ws_url": "wss://stream.testnet.binance.vision/ws",
