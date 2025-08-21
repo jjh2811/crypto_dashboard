@@ -62,12 +62,13 @@ class BinanceExchange:
             config = json.load(f)
         
         binance_config = config['binance']
-        self.testnet = binance_config.get('testnet', False)
-        self.whitelist = binance_config.get('testnet_whitelist', []) if self.testnet else []
+        testnet_config = binance_config.get('testnet', {})
+        self.testnet = testnet_config.get('use', False)
+        self.whitelist = testnet_config.get('whitelist', []) if self.testnet else []
 
         if self.testnet:
-            self.price_ws_url = binance_config['testnet_price_ws_url']
-            self.user_data_ws_url = binance_config['testnet_user_data_ws_url']
+            self.price_ws_url = testnet_config['price_ws_url']
+            self.user_data_ws_url = testnet_config['user_data_ws_url']
         else:
             self.price_ws_url = binance_config['price_ws_url']
             self.user_data_ws_url = binance_config['user_data_ws_url']

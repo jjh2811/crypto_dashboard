@@ -4,9 +4,11 @@
   "binance": {
     "price_ws_url": "wss://stream.binance.com:9443/ws",
     "user_data_ws_url": "wss://ws-api.binance.com:443/ws-api/v3",
-    "testnet_price_ws_url": "wss://stream.testnet.binance.vision/ws",
-    "testnet_user_data_ws_url": "wss://ws-api.testnet.binance.vision/ws-api/v3",
-    "testnet": false,
-    "testnet_whitelist": ["BTC", "USDT"]
+    "testnet": {
+      "use": false,
+      "price_ws_url": "wss://stream.testnet.binance.vision/ws",
+      "user_data_ws_url": "wss://ws-api.testnet.binance.vision/ws-api/v3",
+      "whitelist": ["BTC", "USDT"]
+    }
   }
 }
