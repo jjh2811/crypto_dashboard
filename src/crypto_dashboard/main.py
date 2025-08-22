@@ -43,12 +43,13 @@ async def broadcast_orders_update(exchange):
     update_message = {'type': 'orders_update', 'data': list(exchange.orders_cache.values())}
     await broadcast_message(update_message)
 
-async def broadcast_log(message):
+async def broadcast_log(message, exchange_name=None):
     """모든 클라이언트에게 로그 메시지를 전송합니다."""
     log_message = {
         'type': 'log',
         'message': message,
-        'timestamp': datetime.now(timezone.utc).isoformat()
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'exchange': exchange_name
     }
     log_cache.append(log_message)
     logger.info(f"LOG: {message}")
