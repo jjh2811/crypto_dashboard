@@ -3,18 +3,17 @@ import asyncio
 import os
 import json
 import logging
+import importlib
 from datetime import datetime, timezone
 from aiohttp import web
 import secrets
-
-from .binance import BinanceExchange
 
 
 SECRET_TOKEN = secrets.token_hex(32)
 
 
 # 로깅 설정
-log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -24,11 +23,7 @@ stream_handler.setFormatter(log_formatter)
 logger.addHandler(stream_handler)
 
 clients = set()
-balances_cache = {}
-orders_cache = {}
 log_cache = []
-reference_prices = {}
-reference_time = None
 
 MAX_LOGIN_ATTEMPTS = 5
 LOGIN_LOCKOUT_TIME = 600  # 10 minutes
@@ -43,9 +38,9 @@ async def broadcast_message(message):
         except ConnectionResetError:
             logger.warning(f"Failed to send message to a disconnected client.")
 
-async def broadcast_orders_update():
+async def broadcast_orders_update(exchange):
     """모든 클라이언트에게 현재 주문 목록을 전송합니다."""
-    update_message = {'type': 'orders_update', 'data': list(orders_cache.values())}
+    update_message = {'type': 'orders_update', 'data': list(exchange.orders_cache.values())}
     await broadcast_message(update_message)
 
 async def broadcast_log(message):
@@ -58,41 +53,6 @@ async def broadcast_log(message):
     log_cache.append(log_message)
     logger.info(f"LOG: {message}")
     await broadcast_message(log_message)
-
-def create_balance_update_message(app, symbol, balance_data):
-    """잔고 정보로부터 클라이언트에게 보낼 업데이트 메시지를 생성합니다."""
-    price = Decimal(str(balance_data.get('price', '0')))
-    free_amount = balance_data.get('free', Decimal('0'))
-    locked_amount = balance_data.get('locked', Decimal('0'))
-    total_amount = free_amount + locked_amount
-    value = price * total_amount
-    avg_buy_price = balance_data.get('avg_buy_price')
-    realised_pnl = balance_data.get('realised_pnl')
-
-    unrealised_pnl = None
-    if avg_buy_price is not None and price > 0:
-        unrealised_pnl = (price - avg_buy_price) * total_amount
-
-    message = {
-        'symbol': symbol,
-        'price': float(price),
-        'free': float(free_amount),
-        'locked': float(locked_amount),
-        'value': float(value),
-        'avg_buy_price': float(avg_buy_price) if avg_buy_price is not None else None,
-        'realised_pnl': float(realised_pnl) if realised_pnl is not None else None,
-        'unrealised_pnl': float(unrealised_pnl) if unrealised_pnl is not None else None,
-        'quote_currency': app['quote_currency']
-    }
-
-    if reference_prices and symbol in reference_prices:
-        ref_price = Decimal(str(reference_prices[symbol]))
-        if ref_price > 0:
-            price_change_percent = (price - ref_price) / ref_price * 100
-            message['price_change_percent'] = float(price_change_percent)
-            message['reference_time'] = reference_time
-    
-    return message
 
 async def login(request):
     """POST 요청 + 비밀번호 입력 후 쿠키 발급"""
@@ -164,6 +124,7 @@ async def auth_middleware(request, handler):
 
 
 async def handle_websocket(request):
+    app = request.app
     token = request.cookies.get("auth_token")
     if token != SECRET_TOKEN:
         ws = web.WebSocketResponse()
@@ -171,7 +132,6 @@ async def handle_websocket(request):
         await ws.close(code=1008, message=b'Authentication failed')
         return ws
 
-    global reference_prices, reference_time
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
@@ -180,23 +140,24 @@ async def handle_websocket(request):
     logger.info(f"Total clients: {len(clients)}")
 
     try:
-        if reference_prices and reference_time:
+        if app['reference_prices'] and app['reference_time']:
             await ws.send_json({
                 'type': 'reference_price_info',
-                'time': reference_time
+                'time': app['reference_time'],
+                'prices': app['reference_prices']
             })
 
-        if balances_cache:
-            for symbol, data in balances_cache.items():
-                update_message = create_balance_update_message(request.app, symbol, data)
+        for exchange in app['exchanges'].values():
+            for symbol, data in exchange.balances_cache.items():
+                update_message = exchange.create_balance_update_message(symbol, data)
                 await ws.send_json(update_message)
-        
-        if orders_cache:
-            update_message = {'type': 'orders_update', 'data': list(orders_cache.values())}
-            try:
-                await ws.send_json(update_message)
-            except ConnectionResetError:
-                logger.warning("Failed to send initial 'orders_update' to a newly connected client.")
+            
+            if exchange.orders_cache:
+                update_message = {'type': 'orders_update', 'data': list(exchange.orders_cache.values())}
+                try:
+                    await ws.send_json(update_message)
+                except ConnectionResetError:
+                    logger.warning(f"Failed to send initial 'orders_update' to a newly connected client for {exchange.name}.")
 
         if log_cache:
             for log_msg in log_cache:
@@ -211,22 +172,25 @@ async def handle_websocket(request):
                 try:
                     data = json.loads(msg.data)
                     msg_type = data.get('type')
-                    exchange = request.app.get('exchange')
-
-                    if not exchange:
-                        logger.error("Exchange is not initialized. Cannot process order cancellation.")
+                    
+                    exchanges = app.get('exchanges', {})
+                    if not exchanges:
+                        logger.error("No exchanges are initialized. Cannot process order cancellation.")
                         continue
+                    
+                    # TODO: Add exchange selection logic for multi-exchange support
+                    exchange = list(exchanges.values())[0]
 
                     if msg_type == 'cancel_orders':
                         orders_to_cancel = data.get('orders', [])
-                        logger.info(f"Received request to cancel {len(orders_to_cancel)} orders.")
+                        logger.info(f"Received request to cancel {len(orders_to_cancel)} orders on {exchange.name}.")
                         for order in orders_to_cancel:
                             await exchange.cancel_order(order['id'], order['symbol'])
-                        await broadcast_orders_update()
+                        await broadcast_orders_update(exchange)
                     
                     elif msg_type == 'cancel_all_orders':
                         await exchange.cancel_all_orders()
-                        await broadcast_orders_update()
+                        await broadcast_orders_update(exchange)
 
                 except json.JSONDecodeError:
                     logger.warning(f"Received non-JSON message: {msg.data}")
@@ -239,12 +203,21 @@ async def handle_websocket(request):
         logger.info(f"Client disconnected. Total clients: {len(clients)}")
         if not clients:
             logger.info("Last client disconnected. Storing current prices as reference.")
-            reference_prices = {symbol: data['price'] for symbol, data in balances_cache.items() if 'price' in data and symbol != request.app['quote_currency']}
-            if reference_prices:
-                reference_time = datetime.now(timezone.utc).isoformat()
-                logger.info(f"Reference prices saved at {reference_time} for {list(reference_prices.keys())}")
+            app['reference_prices'] = {}
+            for exchange_name, exchange in app['exchanges'].items():
+                exchange_reference_prices = {
+                    symbol: float(data['price']) 
+                    for symbol, data in exchange.balances_cache.items() 
+                    if 'price' in data and symbol != exchange.quote_currency
+                }
+                if exchange_reference_prices:
+                    app['reference_prices'][exchange_name] = exchange_reference_prices
+            
+            if app['reference_prices']:
+                app['reference_time'] = datetime.now(timezone.utc).isoformat()
+                logger.info(f"Reference prices saved at {app['reference_time']} for {list(app['reference_prices'].keys())}")
             else:
-                reference_time = None
+                app['reference_time'] = None
                 logger.info("No assets to track for reference pricing.")
     return ws
 
@@ -257,66 +230,89 @@ async def http_handler(request):
 
 async def on_startup(app):
     logger.info("Server starting up...")
-    app['balances_cache'] = balances_cache
-    app['orders_cache'] = orders_cache
     app['log_cache'] = log_cache
     app['broadcast_message'] = broadcast_message
     app['broadcast_orders_update'] = broadcast_orders_update
     app['broadcast_log'] = broadcast_log
-    app['create_balance_update_message'] = lambda symbol, data: create_balance_update_message(app, symbol, data)
     app['tracked_assets'] = set()
     app['price_ws_ready'] = asyncio.Event()
     app['subscription_lock'] = asyncio.Lock()
+    app['exchanges'] = {}
+    app['exchange_tasks'] = []
+    app['reference_prices'] = {}
+    app['reference_time'] = None
 
-    try:
-        config_path = os.path.join(os.path.dirname(__file__), 'config.json')
-        with open(config_path) as f:
-            config = json.load(f)
-        app['quote_currency'] = config.get('exchanges', {}).get('binance', {}).get('quote_currency', 'USDT')
-        testnet = config.get('exchanges', {}).get('binance', {}).get('testnet', {}).get('use', False)
+    config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+    with open(config_path) as f:
+        config = json.load(f)
 
-        secrets_path = os.path.join(os.path.dirname(__file__), 'secrets.json')
-        with open(secrets_path) as f:
-            secrets_data = json.load(f)
-        
-        login_password = secrets_data.get('login_password')
-        if not login_password:
-            logger.error("Login password not found in secrets.json under 'login_password' key. Please add it.")
-            os._exit(1)
-        app['login_password'] = login_password
+    secrets_path = os.path.join(os.path.dirname(__file__), 'secrets.json')
+    with open(secrets_path) as f:
+        secrets_data = json.load(f)
 
-        if testnet:
-            logger.info("Connecting to Binance Testnet.")
-            api_key = secrets_data['exchanges']['binance_testnet']['api_key']
-            secret_key = secrets_data['exchanges']['binance_testnet']['secret_key']
-            if "YOUR_BINANCE_TESTNET" in api_key or "YOUR_BINANCE_TESTNET" in secret_key:
-                logger.warning("Please replace placeholder keys in secrets.json with your actual Binance Testnet API keys.")
-                return
-        else:
-            logger.info("Connecting to Binance Mainnet.")
-            api_key = secrets_data['exchanges']['binance']['api_key']
-            secret_key = secrets_data['exchanges']['binance']['secret_key']
-            if "YOUR_BINANCE" in api_key or "YOUR_BINANCE" in secret_key:
-                logger.warning("Please replace placeholder keys in secrets.json with your actual Binance API keys.")
-                return
+    login_password = secrets_data.get('login_password')
+    if not login_password:
+        logger.error("Login password not found in secrets.json under 'login_password' key. Please add it.")
+        os._exit(1)
+    app['login_password'] = login_password
 
-        exchange = BinanceExchange(api_key, secret_key, app)
-        app['exchange'] = exchange
-        await exchange.get_initial_data()
-
-    except (FileNotFoundError, KeyError) as e:
-        logger.error(f"Could not initialize Binance exchange due to missing secrets: {e}")
-        return
-    except Exception as e:
-        logger.error(f"Error during exchange initialization: {e}")
+    exchanges_config = config.get('exchanges', {})
+    if not exchanges_config:
+        logger.error("No exchanges configured in config.json")
         return
 
-    holding_assets = set(balances_cache.keys())
-    order_assets = {o['symbol'].replace(app['quote_currency'], '').replace('/', '') for o in orders_cache.values()}
-    app['tracked_assets'] = holding_assets | order_assets
+    for exchange_name, exchange_config in exchanges_config.items():
+        try:
+            logger.info(f"Initializing exchange: {exchange_name}")
+            
+            testnet = exchange_config.get('testnet', {}).get('use', False)
+            api_key_section = f"{exchange_name}_testnet" if testnet else exchange_name
 
-    app['price_ws_task'] = asyncio.create_task(exchange.connect_price_ws())
-    app['user_data_ws_task'] = asyncio.create_task(exchange.connect_user_data_ws())
+            if api_key_section not in secrets_data.get('exchanges', {}):
+                logger.error(f"API keys for '{api_key_section}' not found in secrets.json")
+                continue
+
+            api_key = secrets_data['exchanges'][api_key_section]['api_key']
+            secret_key = secrets_data['exchanges'][api_key_section]['secret_key']
+
+            if f"YOUR_{api_key_section.upper()}" in api_key or f"YOUR_{api_key_section.upper()}" in secret_key:
+                logger.warning(f"Please replace placeholder keys in secrets.json for {api_key_section}.")
+                continue
+
+            module_name = f".{exchange_name}"
+            class_name = f"{exchange_name.capitalize()}Exchange"
+            
+            module = importlib.import_module(module_name, package=__package__)
+            exchange_class = getattr(module, class_name)
+
+            exchange_instance = exchange_class(api_key, secret_key, app, exchange_name)
+            await exchange_instance.get_initial_data()
+
+            app['exchanges'][exchange_name] = exchange_instance
+
+            price_ws_task = asyncio.create_task(exchange_instance.connect_price_ws())
+            user_data_ws_task = asyncio.create_task(exchange_instance.connect_user_data_ws())
+            app['exchange_tasks'].extend([price_ws_task, user_data_ws_task])
+            
+            logger.info(f"Successfully initialized and connected to {exchange_name}.")
+
+        except (FileNotFoundError, KeyError) as e:
+            logger.error(f"Could not initialize {exchange_name} exchange due to missing secrets or config: {e}")
+            continue
+        except (ModuleNotFoundError, AttributeError) as e:
+            logger.error(f"Could not load exchange module for '{exchange_name}': {e}")
+            continue
+        except Exception as e:
+            logger.error(f"Error during {exchange_name} exchange initialization: {e}")
+            continue
+
+    # This logic might need adjustment for multi-exchange asset tracking
+    all_tracked_assets = set()
+    for exchange in app['exchanges'].values():
+        holding_assets = set(exchange.balances_cache.keys())
+        order_assets = {o['symbol'].replace(exchange.quote_currency, '').replace('/', '') for o in exchange.orders_cache.values()}
+        all_tracked_assets.update(holding_assets | order_assets)
+    app['tracked_assets'] = all_tracked_assets
     logger.info("User data stream task started.")
 
 async def on_shutdown(app):
@@ -327,18 +323,19 @@ async def on_shutdown(app):
 
 async def on_cleanup(app):
     logger.info("Cleaning up background tasks...")
-    tasks_to_cancel = ['price_ws_task', 'user_data_ws_task']
-    for task_name in tasks_to_cancel:
-        if task_name in app and not app[task_name].done():
-            app[task_name].cancel()
-            try:
-                await app[task_name]
-            except asyncio.CancelledError:
-                pass
+    if 'exchange_tasks' in app:
+        for task in app['exchange_tasks']:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
-    if 'exchange' in app:
-        await app['exchange'].close()
-        logger.info("Exchange connection closed.")
+    if 'exchanges' in app:
+        for exchange_name, exchange in app['exchanges'].items():
+            await exchange.close()
+            logger.info(f"{exchange_name} exchange connection closed.")
 
     logger.info("All background tasks stopped.")
 
