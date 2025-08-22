@@ -7,8 +7,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const logsContainer = document.getElementById("logs-container");
     const referenceTimeContainer = document.getElementById("reference-time-container");
     const referenceTimeElement = document.getElementById("reference-time");
+    const exchangeTabsContainer = document.getElementById("exchange-tabs");
+
     let currentPrices = {};
     let cachedOrders = [];
+    let exchanges = [];
+    let activeExchange = '';
+
     const modal = document.getElementById("details-modal");
     const closeButton = document.querySelector(".close-button");
 
@@ -100,7 +105,15 @@ document.addEventListener("DOMContentLoaded", () => {
     websocket.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
-            if (data.type === 'remove_holding') {
+            if (data.type === 'exchanges_list') {
+                exchanges = data.data;
+                createExchangeTabs();
+                if (exchanges.length > 0) {
+                    setActiveExchange(exchanges[0]);
+                }
+            } else if (data.type === 'balance_update') {
+                updateCryptoCard(data);
+            } else if (data.type === 'remove_holding') {
                 const card = document.getElementById(data.symbol);
                 if (card) {
                     card.remove();
@@ -108,14 +121,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             } else if (data.type === 'orders_update') {
                 cachedOrders = data.data;
-                updateOrdersList(cachedOrders); // Full redraw only on order changes
+                updateOrdersList(cachedOrders);
             } else if (data.type === 'log') {
                 const logData = data.message;
                 const logElement = document.createElement('p');
                 const now = new Date(data.timestamp);
                 const timestamp = `${now.getMonth() + 1}/${now.getDate()} ${now.toLocaleTimeString()}`;
                 
-                let messageText = `[${timestamp}] ${logData.status}`;
+                let messageText = `[${timestamp}]`;
+                if (data.exchange) {
+                    messageText += ` [${data.exchange}]`;
+                }
+                messageText += ` ${logData.status}`;
+
                 if (logData.symbol) {
                     messageText += ` - ${logData.symbol}`;
                 }
@@ -143,15 +161,9 @@ document.addEventListener("DOMContentLoaded", () => {
             } else if (data.type === 'reference_price_info') {
                 updateReferencePriceInfo(data.time);
             } else {
-                // 'free' 또는 'amount' 키가 존재하면 보유 자산 정보로 간주하고 카드 업데이트
-                if (data.free !== undefined || data.amount !== undefined) {
-                    updateCryptoCard(data);
-                } else {
-                    // 그렇지 않으면 가격 정보로 간주
-                    currentPrices[data.symbol] = parseFloat(data.price);
-                    updateModalUnrealisedPnL(data.symbol, data.price);
-                }
-                updatePriceDiffs(); // Update only price diffs on price changes
+                currentPrices[data.symbol] = parseFloat(data.price);
+                updateModalUnrealisedPnL(data.symbol, data.price);
+                updatePriceDiffs();
             }
         } catch (e) {
             console.error("Failed to parse JSON:", e);
@@ -164,7 +176,6 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     websocket.onclose = (event) => {
         console.log("WebSocket connection closed:", event.code, event.reason);
-        // 1008 is the "Policy Violation" status code, which we used for authentication failure
         if (event.code === 1008) {
             alert("세션이 만료되었거나 인증에 실패했습니다. 다시 로그인해주세요.");
             window.location.href = "/login";
@@ -173,8 +184,33 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    function createExchangeTabs() {
+        exchangeTabsContainer.innerHTML = '';
+        exchanges.forEach(exchange => {
+            const tab = document.createElement('button');
+            tab.className = 'exchange-tab-button';
+            tab.textContent = exchange;
+            tab.dataset.exchange = exchange;
+            tab.onclick = () => setActiveExchange(exchange);
+            exchangeTabsContainer.appendChild(tab);
+        });
+    }
+
+    function setActiveExchange(exchangeName) {
+        activeExchange = exchangeName;
+        document.querySelectorAll('.exchange-tab-button').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.exchange === exchangeName);
+        });
+        document.querySelectorAll('.crypto-card').forEach(card => {
+            if (card.dataset.exchange) {
+                card.style.display = card.dataset.exchange === exchangeName ? '' : 'none';
+            }
+        });
+        updateTotalValue();
+    }
+
     function updateCryptoCard(data) {
-        const { symbol, price } = data;
+        const { symbol, price, exchange } = data;
         currentPrices[symbol] = parseFloat(price);
         let card = document.getElementById(symbol);
 
@@ -185,12 +221,15 @@ document.addEventListener("DOMContentLoaded", () => {
             cryptoContainer.appendChild(card);
         }
         
-        // Store data in dataset for modal
         Object.keys(data).forEach(key => {
             card.dataset[key] = data[key];
         });
 
         card.innerHTML = createCryptoCardHTML(data);
+        if (activeExchange && card.dataset.exchange !== activeExchange) {
+            card.style.display = 'none';
+        }
+
         updateTotalValue();
 
         if (modal.style.display === "block" && document.getElementById("modal-crypto-name").textContent === symbol) {
@@ -202,8 +241,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function updateTotalValue() {
         totalValue = 0;
-        document.querySelectorAll('#crypto-container .crypto-card .value').forEach(el => {
-            totalValue += parseFloat(el.dataset.value || 0);
+        document.querySelectorAll('#crypto-container .crypto-card').forEach(el => {
+            if (el.style.display !== 'none') {
+                totalValue += parseFloat(el.querySelector('.value').dataset.value || 0);
+            }
         });
         totalValueElement.textContent = `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`;
         updateShares();
@@ -213,13 +254,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (totalValue === 0) return;
 
         document.querySelectorAll('#crypto-container .crypto-card').forEach(card => {
-            const valueElement = card.querySelector('.value');
-            const shareElement = card.querySelector('.share .info-value');
+            if (card.style.display !== 'none') {
+                const valueElement = card.querySelector('.value');
+                const shareElement = card.querySelector('.share .info-value');
 
-            if (valueElement && shareElement) {
-                const cardValue = parseFloat(valueElement.dataset.value || 0);
-                const share = (cardValue / totalValue) * 100;
-                shareElement.textContent = `${share.toFixed(2)}%`;
+                if (valueElement && shareElement) {
+                    const cardValue = parseFloat(valueElement.dataset.value || 0);
+                    const share = (cardValue / totalValue) * 100;
+                    shareElement.textContent = `${share.toFixed(2)}%`;
+                }
             }
         });
     }
@@ -259,7 +302,7 @@ document.addEventListener("DOMContentLoaded", () => {
         orders.sort((a, b) => b.timestamp - a.timestamp).forEach(order => {
             const orderCard = document.createElement("div");
             orderCard.className = "crypto-card";
-            orderCard.dataset.orderId = order.id; // Set dataset for identification
+            orderCard.dataset.orderId = order.id;
             const baseSymbol = order.symbol.replace('USDT', '').replace('/', '');
             const currentPrice = currentPrices[baseSymbol];
             
@@ -281,14 +324,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function createCryptoCardHTML(data) {
         const symbol = data.symbol || 'Unknown';
-        // 모든 숫자 값을 파싱하기 전에 유효성을 확인하고, 아니면 0으로 설정합니다.
         const price = Number.isFinite(parseFloat(data.price)) ? parseFloat(data.price) : 0;
         const free = Number.isFinite(parseFloat(data.free)) ? parseFloat(data.free) : 0;
         const locked = Number.isFinite(parseFloat(data.locked)) ? parseFloat(data.locked) : 0;
         const value = Number.isFinite(parseFloat(data.value)) ? parseFloat(data.value) : 0;
         
         const totalAmount = free + locked;
-        // toFixed(8)로 정밀도를 유지한 뒤 parseFloat으로 불필요한 0을 제거합니다.
         const lockedAmountHtml = locked > 1e-8 ? `<p class="locked">Locked: ${parseFloat(locked.toFixed(8))}</p>` : '';
         
         let avgBuyPriceHtml;
@@ -413,7 +454,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (time) {
             const date = new Date(time);
             referenceTimeElement.textContent = date.toLocaleString();
-            // referenceTimeContainer.style.display = 'block'; // 숨김 처리
         } else {
             referenceTimeContainer.style.display = 'none';
         }

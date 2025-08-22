@@ -141,6 +141,9 @@ async def handle_websocket(request):
     logger.info(f"Total clients: {len(clients)}")
 
     try:
+        exchange_names = list(app['exchanges'].keys())
+        await ws.send_json({'type': 'exchanges_list', 'data': exchange_names})
+
         if app['reference_prices'] and app['reference_time']:
             await ws.send_json({
                 'type': 'reference_price_info',

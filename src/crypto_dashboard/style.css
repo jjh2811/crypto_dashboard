@@ -7,6 +7,25 @@ body {
     padding-bottom: 80px; /* Add padding to prevent overlap with command bar */
 }
 
+#exchange-tabs {
+    margin-bottom: 10px;
+}
+
+.exchange-tab-button {
+    background-color: #fff;
+    border: 1px solid #ccc;
+    padding: 10px 15px;
+    cursor: pointer;
+    margin-right: 5px;
+    border-radius: 5px;
+}
+
+.exchange-tab-button.active {
+    background-color: #1a73e8;
+    color: white;
+    border-color: #1a73e8;
+}
+
 /* Tab Styles */
 .tab-container {
     overflow: hidden;

@@ -112,6 +112,8 @@ class BinanceExchange:
             unrealised_pnl = (price - avg_buy_price) * total_amount
 
         message = {
+            'type': 'balance_update',
+            'exchange': self.name,
             'symbol': symbol,
             'price': float(price),
             'free': float(free_amount),
@@ -317,7 +319,7 @@ class BinanceExchange:
                                 self.balances_cache[symbol]['price'] = Decimal(price)
                                 update_message = self.create_balance_update_message(symbol, self.balances_cache[symbol])
                             else:
-                                update_message = {'symbol': symbol, 'price': float(Decimal(price)), 'quote_currency': self.quote_currency}
+                                update_message = {'type':'balance_update', 'exchange': self.name, 'symbol': symbol, 'price': float(Decimal(price)), 'quote_currency': self.quote_currency}
 
                             await self.app['broadcast_message'](update_message)
                         elif 'result' in data and data.get('result') is None:
