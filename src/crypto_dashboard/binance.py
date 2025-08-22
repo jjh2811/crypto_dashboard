@@ -61,7 +61,7 @@ class BinanceExchange:
         with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
             config = json.load(f)
         
-        binance_config = config['binance']
+        binance_config = config['exchanges']['binance']
         testnet_config = binance_config.get('testnet', {})
         self.testnet = testnet_config.get('use', False)
         self.whitelist = testnet_config.get('whitelist', []) if self.testnet else []

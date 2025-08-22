@@ -272,8 +272,8 @@ async def on_startup(app):
         config_path = os.path.join(os.path.dirname(__file__), 'config.json')
         with open(config_path) as f:
             config = json.load(f)
-        app['quote_currency'] = config.get('binance', {}).get('quote_currency', 'USDT')
-        testnet = config.get('binance', {}).get('testnet', {}).get('use', False)
+        app['quote_currency'] = config.get('exchanges', {}).get('binance', {}).get('quote_currency', 'USDT')
+        testnet = config.get('exchanges', {}).get('binance', {}).get('testnet', {}).get('use', False)
 
         secrets_path = os.path.join(os.path.dirname(__file__), 'secrets.json')
         with open(secrets_path) as f:
