@@ -129,9 +129,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 const timestamp = `${now.getMonth() + 1}/${now.getDate()} ${now.toLocaleTimeString()}`;
                 
                 let messageText = `[${timestamp}]`;
-                if (data.exchange) {
-                    messageText += ` [${data.exchange}]`;
-                }
+                // if (data.exchange) { // This is the line that adds the exchange prefix
+                //     messageText += ` [${data.exchange}]`;
+                // }
                 messageText += ` ${logData.status}`;
 
                 if (logData.symbol) {
