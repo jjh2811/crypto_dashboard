@@ -91,6 +91,9 @@ class BinanceExchange:
         self.balances_cache: Dict[str, Dict[str, Any]] = {}
         self.orders_cache: Dict[str, Dict[str, Any]] = {}
         self.wscp: Optional[WebSocketClientProtocol] = None
+        self.price_ws: Optional[WebSocketClientProtocol] = None
+        self.price_ws_ready = asyncio.Event()
+        self.tracked_assets = set()
         self._ws_id_counter = 1
 
     @property
@@ -184,6 +187,10 @@ class BinanceExchange:
             self.logger.error(f"Failed to fetch initial data from Binance: {e}")
             await self.exchange.close()
             raise
+        
+        holding_assets = set(self.balances_cache.keys())
+        order_assets = {o['symbol'].replace(self.quote_currency, '').replace('/', '') for o in self.orders_cache.values()}
+        self.tracked_assets = holding_assets | order_assets
 
     async def calculate_average_buy_price(self, asset: str, current_amount: Decimal) -> tuple[Optional[Decimal], Optional[Decimal]]:
         if asset == self.quote_currency or current_amount <= 0:
@@ -289,14 +296,12 @@ class BinanceExchange:
         while True:
             try:
                 async with connect(self.price_ws_url) as websocket:
-                    self.app['price_ws'] = websocket
+                    self.price_ws = websocket
                     self.logger.info("Price data websocket connection established.")
-                    if self.app.get('price_ws_ready'):
-                        self.app['price_ws_ready'].set()
+                    self.price_ws_ready.set()
 
-                    initial_assets = self.app.get('tracked_assets', set())
-                    if initial_assets:
-                        assets_to_subscribe = [asset for asset in initial_assets if asset != 'USDT']
+                    if self.tracked_assets:
+                        assets_to_subscribe = [asset for asset in self.tracked_assets if asset != 'USDT']
                         streams = [f"{asset.lower()}usdt@miniTicker" for asset in assets_to_subscribe]
                         if streams:
                             await websocket.send(json.dumps({
@@ -327,21 +332,17 @@ class BinanceExchange:
 
             except (ConnectionClosed, ConnectionClosedError):
                 self.logger.warning("Price data websocket connection closed. Reconnecting in 5 seconds...")
-                if self.app.get('price_ws_ready'):
-                    self.app['price_ws_ready'].clear()
-                self.app['price_ws'] = None
+                self.price_ws_ready.clear()
+                self.price_ws = None
                 await asyncio.sleep(5)
             except Exception as e:
                 self.logger.error(f"An error occurred in connect_price_ws: {e}", exc_info=True)
-                if self.app.get('price_ws_ready'):
-                    self.app['price_ws_ready'].clear()
-                self.app['price_ws'] = None
+                self.price_ws_ready.clear()
+                self.price_ws = None
                 await asyncio.sleep(5)
 
     async def connect_user_data_ws(self) -> None:
-        price_ws_ready = self.app.get('price_ws_ready')
-        if price_ws_ready:
-            await price_ws_ready.wait()
+        await self.price_ws_ready.wait()
 
         self.logger.info(f"Connecting to Binance User Data Stream: {self.user_data_ws_url}")
 
@@ -543,7 +544,7 @@ class BinanceExchange:
             return
 
         async with lock:
-            websocket = self.app.get('price_ws')
+            websocket = self.price_ws
             if not websocket or websocket.state != State.OPEN:
                 self.logger.warning("Price websocket not available for subscription update.")
                 return
@@ -562,15 +563,13 @@ class BinanceExchange:
             order_assets = {order.get('symbol', '').replace(self.quote_currency, '').replace('/', '') for order in self.orders_cache.values()}
             required_assets = (holding_assets | order_assets)
 
-            current_assets = self.app.get('tracked_assets', set())
-
-            to_add = required_assets - current_assets
-            to_remove = current_assets - required_assets
+            to_add = required_assets - self.tracked_assets
+            to_remove = self.tracked_assets - required_assets
 
             await send_subscription_message("SUBSCRIBE", [asset for asset in to_add if asset != self.quote_currency])
             await send_subscription_message("UNSUBSCRIBE", [asset for asset in to_remove if asset != self.quote_currency])
 
-            self.app['tracked_assets'] = required_assets
+            self.tracked_assets = required_assets
             if to_add or to_remove:
                 self.logger.info(f"Subscription updated. Added: {to_add}, Removed: {to_remove}. Current: {required_assets}")
 

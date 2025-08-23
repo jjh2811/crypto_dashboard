@@ -54,7 +54,7 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         });
         if (selectedOrders.length > 0) {
-            websocket.send(JSON.stringify({ type: 'cancel_orders', orders: selectedOrders }));
+            websocket.send(JSON.stringify({ type: 'cancel_orders', orders: selectedOrders, exchange: activeExchange }));
         } else {
             alertModalText.textContent = "취소할 주문을 선택하세요.";
             alertModal.style.display = "block";
@@ -71,7 +71,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     confirmYesBtn.addEventListener("click", () => {
-        websocket.send(JSON.stringify({ type: 'cancel_all_orders' }));
+        websocket.send(JSON.stringify({ type: 'cancel_all_orders', exchange: activeExchange }));
         confirmModal.style.display = "none";
     });
 

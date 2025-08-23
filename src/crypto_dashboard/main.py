@@ -188,23 +188,25 @@ async def handle_websocket(request):
                     msg_type = data.get('type')
                     
                     exchanges = app.get('exchanges', {})
-                    if not exchanges:
-                        logger.error("No exchanges are initialized. Cannot process order cancellation.")
+                    exchange_name = data.get('exchange')
+
+                    if not exchanges or not exchange_name or exchange_name not in exchanges:
+                        logger.error(f"Invalid exchange specified or no exchanges initialized. Cannot process order cancellation. Exchange: {exchange_name}")
                         continue
                     
-                    # TODO: Add exchange selection logic for multi-exchange support
-                    exchange = list(exchanges.values())[0]
+                    exchange = exchanges[exchange_name]
 
                     if msg_type == 'cancel_orders':
                         orders_to_cancel = data.get('orders', [])
                         logger.info(f"Received request to cancel {len(orders_to_cancel)} orders on {exchange.name}.")
                         for order in orders_to_cancel:
                             await exchange.cancel_order(order['id'], order['symbol'])
-                        await broadcast_orders_update(exchange)
+                        # The broadcast will be triggered by the user data stream update
                     
                     elif msg_type == 'cancel_all_orders':
+                        logger.info(f"Received request to cancel all orders on {exchange.name}.")
                         await exchange.cancel_all_orders()
-                        await broadcast_orders_update(exchange)
+                        # The broadcast will be triggered by the user data stream update
 
                 except json.JSONDecodeError:
                     logger.warning(f"Received non-JSON message: {msg.data}")
@@ -248,8 +250,6 @@ async def on_startup(app):
     app['broadcast_message'] = broadcast_message
     app['broadcast_orders_update'] = broadcast_orders_update
     app['broadcast_log'] = broadcast_log
-    app['tracked_assets'] = set()
-    app['price_ws_ready'] = asyncio.Event()
     app['subscription_lock'] = asyncio.Lock()
     app['exchanges'] = {}
     app['exchange_tasks'] = []
@@ -320,13 +320,6 @@ async def on_startup(app):
             logger.error(f"Error during {exchange_name} exchange initialization: {e}")
             continue
 
-    # This logic might need adjustment for multi-exchange asset tracking
-    all_tracked_assets = set()
-    for exchange in app['exchanges'].values():
-        holding_assets = set(exchange.balances_cache.keys())
-        order_assets = {o['symbol'].replace(exchange.quote_currency, '').replace('/', '') for o in exchange.orders_cache.values()}
-        all_tracked_assets.update(holding_assets | order_assets)
-    app['tracked_assets'] = all_tracked_assets
     logger.info("User data stream task started.")
 
 async def on_shutdown(app):

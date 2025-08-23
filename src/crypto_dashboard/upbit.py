@@ -78,6 +78,9 @@ class UpbitExchange:
         self.balances_cache: Dict[str, Dict[str, Any]] = {}
         self.orders_cache: Dict[str, Dict[str, Any]] = {}
         self.wscp: Optional[WebSocketClientProtocol] = None
+        self.price_ws: Optional[WebSocketClientProtocol] = None
+        self.price_ws_ready = asyncio.Event()
+        self.tracked_assets = set()
         self._ws_id_counter = 1
 
     @property
@@ -125,8 +128,49 @@ class UpbitExchange:
         return message
 
     async def get_initial_data(self) -> None:
-        self.logger.info("get_initial_data for Upbit is not implemented yet. Skipping.")
-        return
+        try:
+            balance = await self.exchange.fetch_balance()
+            open_orders = await self.exchange.fetch_open_orders()
+
+            for order in open_orders:
+                price = Decimal(str(order.get('price') or 0))
+                amount = Decimal(str(order.get('amount') or 0))
+                order_id = order.get('id')
+                if order_id:
+                    self.orders_cache[order_id] = {
+                        'id': order_id, 'symbol': order.get('symbol'), 'side': order.get('side'),
+                        'price': float(price), 'amount': float(amount), 'value': float(price * amount),
+                        'quote_currency': order.get('symbol', '').split('/')[1] if order.get('symbol') and '/' in order.get('symbol', '') else self.quote_currency,
+                        'timestamp': order.get('timestamp'), 'status': order.get('status')
+                    }
+            self.logger.info(f"Fetched {len(open_orders)} open orders at startup.")
+
+            total_balances = {
+                asset: total for asset, total in balance.get('total', {}).items() if total > 0
+            }
+
+            for asset, total_amount in total_balances.items():
+                avg_buy_price, realised_pnl = await self.calculate_average_buy_price(asset, Decimal(str(total_amount)))
+                free_amount = Decimal(str(balance.get('free', {}).get(asset, 0)))
+                locked_amount = Decimal(str(balance.get('used', {}).get(asset, 0)))
+                self.balances_cache[asset] = {
+                    'free': free_amount,
+                    'locked': locked_amount,
+                    'total_amount': free_amount + locked_amount,
+                    'price': Decimal('1.0') if asset == self.quote_currency else Decimal('0'),
+                    'avg_buy_price': avg_buy_price,
+                    'realised_pnl': realised_pnl
+                }
+                self.logger.info(f"Asset: {asset}, Avg Buy Price: {avg_buy_price if avg_buy_price is not None else 'N/A'}, Realised PnL: {realised_pnl}")
+
+        except Exception as e:
+            self.logger.error(f"Failed to fetch initial data from Upbit: {e}")
+            await self.exchange.close()
+            raise
+
+        holding_assets = set(self.balances_cache.keys())
+        order_assets = {o['symbol'].replace(self.quote_currency, '').replace('/', '') for o in self.orders_cache.values()}
+        self.tracked_assets = holding_assets | order_assets
 
     async def calculate_average_buy_price(self, asset: str, current_amount: Decimal) -> tuple[Optional[Decimal], Optional[Decimal]]:
         if asset == self.quote_currency or current_amount <= 0:
