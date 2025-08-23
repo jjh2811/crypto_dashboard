@@ -361,7 +361,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const amount = parseFloat(order.amount) || 0;
         const filled = parseFloat(order.filled) || 0;
+        const price = parseFloat(order.price) || 0;
         const progress = amount > 0 ? (filled / amount) * 100 : 0;
+
+        const unfilledValue = (amount - filled) * price;
 
         return `
             <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -393,7 +396,7 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="info-row">
                 <span class="info-label">Value:</span>
-                <span class="info-value">${parseFloat(order.value).toFixed(3)}</span>
+                <span class="info-value">${unfilledValue.toFixed(3)}</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Date:</span>
