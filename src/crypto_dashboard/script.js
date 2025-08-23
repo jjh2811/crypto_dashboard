@@ -354,7 +354,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function createOrderCardHTML(order, currentPrice) {
         const baseSymbol = order.symbol.replace('USDT', '').replace('/', '');
-        const sideClass = order.side.toLowerCase() === 'buy' ? 'side-buy' : 'side-sell';
+        const side = (order.side || '').toUpperCase();
+        const sideClass = side === 'BUY' ? 'side-buy' : 'side-sell';
         const orderDate = new Date(order.timestamp).toLocaleString();
         
         const quoteCurrency = order.quote_currency || 'USDT';
@@ -375,7 +376,18 @@ document.addEventListener("DOMContentLoaded", () => {
         const amount = parseFloat(order.amount) || 0;
         const filled = parseFloat(order.filled) || 0;
         const price = parseFloat(order.price) || 0;
-        const progress = amount > 0 ? (filled / amount) * 100 : 0;
+        
+        let amountText;
+        let progress;
+
+        if (side === 'BUY') {
+            amountText = `${formatNumber(filled)} / ${formatNumber(amount)}`;
+            progress = amount > 0 ? (filled / amount) * 100 : 0;
+        } else { // SELL
+            const unfilled = amount - filled;
+            amountText = `${formatNumber(unfilled)} / ${formatNumber(amount)}`;
+            progress = amount > 0 ? (unfilled / amount) * 100 : 0;
+        }
 
         const unfilledValue = (amount - filled) * price;
 
@@ -386,7 +398,7 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="info-row">
                 <span class="info-label">Side:</span>
-                <span class="info-value ${sideClass}">${order.side}</span>
+                <span class="info-value ${sideClass}">${side}</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Price:</span>
@@ -402,7 +414,7 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="info-row">
                 <span class="info-label">Amount:</span>
-                <span class="info-value">${formatNumber(filled)} / ${formatNumber(amount)}</span>
+                <span class="info-value">${amountText}</span>
             </div>
             <div class="progress-bar-container">
                 <div class="progress-bar" style="width: ${progress}%;"></div>
