@@ -246,7 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 totalValue += parseFloat(el.querySelector('.value').dataset.value || 0);
             }
         });
-        totalValueElement.textContent = `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`;
+        totalValueElement.textContent = `${totalValue.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`;
         updateShares();
     }
 
@@ -275,7 +275,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const baseSymbol = order.symbol.replace('USDT', '').replace('/', '');
             const currentPrice = currentPrices[baseSymbol];
-            const priceDiffElement = card.querySelector('.price-diff');
+            const priceDiffElement = card.querySelector('.price-diff-value');
 
             if (currentPrice && priceDiffElement) {
                 const priceDiff = currentPrice > 0 ? ((order.price - currentPrice) / currentPrice) * 100 : 0;
@@ -287,8 +287,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     diffClass = priceDiff < 0 ? 'side-buy' : 'side-sell';
                 }
 
-                priceDiffElement.className = `price-diff ${diffClass}`;
-                priceDiffElement.textContent = `Diff: ${priceDiff.toFixed(2)}%`;
+                priceDiffElement.className = `info-value price-diff-value ${diffClass}`;
+                priceDiffElement.textContent = `${priceDiff.toFixed(2)}%`;
             }
         });
     }
@@ -382,7 +382,7 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="info-row">
                 <span class="info-label">Diff:</span>
-                <span class="info-value ${diffClass}">${priceDiffText}</span>
+                <span class="info-value price-diff-value ${diffClass}">${priceDiffText}</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Amount:</span>
