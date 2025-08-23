@@ -398,16 +398,24 @@ document.addEventListener("DOMContentLoaded", () => {
             priceDiffHtml = `<p class="price-diff ${diffClass}">Diff: ${priceDiff.toFixed(2)}%</p>`;
         }
 
+        const amount = parseFloat(order.amount) || 0;
+        const filled = parseFloat(order.filled) || 0;
+        const remaining = amount - filled;
+        const progress = amount > 0 ? (filled / amount) * 100 : 0;
+
         return `
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <h2 style="margin: 0;">${baseSymbol}</h2>
                 <input type="checkbox" class="order-checkbox" data-order-id="${order.id}" data-symbol="${order.symbol}">
             </div>
-            <p class="side ${sideClass}">${order.side}</p>
+            <p class="side ${sideClass}">${order.side} (${order.status})</p>
             <p class="price">Price: ${parseFloat(order.price)}</p>
             ${priceDiffHtml}
-            <p class="amount">Amount: ${order.amount}</p>
-            <p class="value">Value: $${parseFloat(order.value).toFixed(3)}</p>
+            <p class="amount">Amount: ${remaining.toFixed(8)} / ${amount.toFixed(8)}</p>
+            <div class="progress-bar-container">
+                <div class="progress-bar" style="width: ${progress}%;"></div>
+            </div>
+            <p class="value">Value: ${parseFloat(order.value).toFixed(3)}</p>
             <p class="date">${orderDate}</p>
         `;
     }

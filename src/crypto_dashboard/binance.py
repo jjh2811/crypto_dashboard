@@ -437,47 +437,76 @@ class BinanceExchange:
                             if not all([order_id, symbol, status]):
                                 continue
 
-                            if status in ['NEW', 'PARTIALLY_FILLED']:
-                                price = Decimal(data.get('p', '0'))
-                                amount = Decimal(data.get('q', '0'))
+                            price = Decimal(data.get('p', '0'))
+                            original_amount = Decimal(data.get('q', '0'))
+                            last_executed_quantity = Decimal(data.get('l', '0'))
+                            cumulative_filled_quantity = Decimal(data.get('z', '0'))
+                            side = data.get('S')
+                            asset = symbol.replace(self.quote_currency, '')
+
+
+                            log_payload: Dict[str, Any] = {
+                                'status': status,
+                                'symbol': symbol,
+                                'side': side,
+                            }
+
+                            if status == 'NEW':
                                 self.orders_cache[order_id] = {
                                     'id': order_id,
                                     'symbol': symbol,
-                                    'side': data.get('S'),
+                                    'side': side,
                                     'price': float(price),
-                                    'amount': float(amount),
-                                    'value': float(price * amount),
-                                    'quote_currency': symbol[len(symbol.replace(data.get('S', ''), '')):],
+                                    'amount': float(original_amount),
+                                    'filled': float(cumulative_filled_quantity),
+                                    'value': float(price * original_amount),
+                                    'quote_currency': self.quote_currency,
                                     'timestamp': data.get('T'),
                                     'status': status
                                 }
-                                self.logger.info(f"New/updated order: {order_id} - {symbol} {status}")
-                                await self.app['broadcast_log']({
-                                    'status': status,
-                                    'symbol': symbol,
-                                    'side': data.get('S'),
-                                    'price': float(price),
-                                    'amount': float(amount)
-                                }, self.name)
-                            else:
+                                self.logger.info(f"New order: {order_id} - {symbol} {status}")
+                                log_payload.update({'price': float(price), 'amount': float(original_amount)})
+                                await self.app['broadcast_log'](log_payload, self.name)
+
+                            elif status == 'PARTIALLY_FILLED':
+                                if order_id in self.orders_cache:
+                                    self.orders_cache[order_id]['filled'] = float(cumulative_filled_quantity)
+                                    self.orders_cache[order_id]['status'] = status
+                                    self.logger.info(f"Updated order: {order_id} - {symbol} {status}, Filled: {cumulative_filled_quantity}")
+                                else: # If order is not in cache, treat it as new
+                                    self.orders_cache[order_id] = {
+                                        'id': order_id,
+                                        'symbol': symbol,
+                                        'side': side,
+                                        'price': float(price),
+                                        'amount': float(original_amount),
+                                        'filled': float(cumulative_filled_quantity),
+                                        'value': float(price * original_amount),
+                                        'quote_currency': self.quote_currency,
+                                        'timestamp': data.get('T'),
+                                        'status': status
+                                    }
+                                    self.logger.info(f"New (partially filled) order: {order_id} - {symbol} {status}")
+
+                                log_payload.update({'price': float(price), 'amount': float(last_executed_quantity)})
+                                await self.app['broadcast_log'](log_payload, self.name)
+
+                            elif status in ['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED']:
                                 if order_id in self.orders_cache:
                                     del self.orders_cache[order_id]
-                                    self.logger.info(f"Order {order_id} removed from cache.")
-                                    await self.app['broadcast_log']({
-                                        'status': status,
-                                        'symbol': symbol,
-                                        'side': data.get('S')
-                                    }, self.name)
+                                    self.logger.info(f"Order {order_id} ({symbol} {status}) removed from cache.")
+                                
+                                if status == 'FILLED':
+                                    log_payload.update({'price': float(data.get('L', '0')), 'amount': float(last_executed_quantity)})
+
+                                await self.app['broadcast_log'](log_payload, self.name)
 
                             await self.app['broadcast_orders_update'](self)
 
-                            if status in ['PARTIALLY_FILLED', 'FILLED'] and data.get('S') == 'BUY':
-                                asset = symbol.replace(self.quote_currency, '')
-                                # 'l' is Last executed quantity, 'L' is Last executed price
-                                last_filled_quantity = Decimal(data.get('l', '0'))
+                            if status in ['PARTIALLY_FILLED', 'FILLED'] and side == 'BUY':
                                 last_filled_price = Decimal(data.get('L', '0'))
 
-                                if asset in self.balances_cache and last_filled_quantity > 0:
+                                if asset in self.balances_cache and last_executed_quantity > 0:
                                     old_total_amount = self.balances_cache[asset].get('total_amount', Decimal('0'))
                                     old_avg_price = self.balances_cache[asset].get('avg_buy_price')
 
@@ -485,18 +514,17 @@ class BinanceExchange:
                                         new_avg_price = last_filled_price
                                     else:
                                         old_cost = old_total_amount * old_avg_price
-                                        fill_cost = last_filled_quantity * last_filled_price
-                                        new_total_amount = old_total_amount + last_filled_quantity
+                                        fill_cost = last_executed_quantity * last_filled_price
+                                        new_total_amount = old_total_amount + last_executed_quantity
 
                                         if new_total_amount > 0:
                                             new_avg_price = (old_cost + fill_cost) / new_total_amount
                                         else:
                                             new_avg_price = last_filled_price
-
+                                    
                                     self.balances_cache[asset]['avg_buy_price'] = new_avg_price
-                                    self.balances_cache[asset]['total_amount'] = old_total_amount + last_filled_quantity
-
-                                    self.logger.info(f"Average price for {asset} updated to {new_avg_price} by trade. Last fill: {last_filled_quantity} @ {last_filled_price}")
+                                    self.balances_cache[asset]['total_amount'] = old_total_amount + last_executed_quantity
+                                    self.logger.info(f"Average price for {asset} updated to {new_avg_price} by trade. Last fill: {last_executed_quantity} @ {last_filled_price}")
 
                             await self.update_subscriptions_if_needed()
 
