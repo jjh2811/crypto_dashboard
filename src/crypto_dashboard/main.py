@@ -40,7 +40,12 @@ async def broadcast_message(message):
 
 async def broadcast_orders_update(exchange):
     """모든 클라이언트에게 현재 주문 목록을 전송합니다."""
-    update_message = {'type': 'orders_update', 'data': list(exchange.orders_cache.values())}
+    orders_with_exchange = []
+    for order in exchange.orders_cache.values():
+        order_copy = order.copy()
+        order_copy['exchange'] = exchange.name
+        orders_with_exchange.append(order_copy)
+    update_message = {'type': 'orders_update', 'data': orders_with_exchange}
     await broadcast_message(update_message)
 
 async def broadcast_log(message, exchange_name=None):
@@ -157,7 +162,12 @@ async def handle_websocket(request):
                 await ws.send_json(update_message)
             
             if exchange.orders_cache:
-                update_message = {'type': 'orders_update', 'data': list(exchange.orders_cache.values())}
+                orders_with_exchange = []
+                for order in exchange.orders_cache.values():
+                    order_copy = order.copy()
+                    order_copy['exchange'] = exchange.name
+                    orders_with_exchange.append(order_copy)
+                update_message = {'type': 'orders_update', 'data': orders_with_exchange}
                 try:
                     await ws.send_json(update_message)
                 except ConnectionResetError:

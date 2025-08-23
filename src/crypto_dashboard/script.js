@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let currentPrices = {};
     let cachedOrders = [];
+    let cachedLogs = [];
     let exchanges = [];
     let activeExchange = '';
 
@@ -121,43 +122,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             } else if (data.type === 'orders_update') {
                 cachedOrders = data.data;
-                updateOrdersList(cachedOrders);
+                updateOrdersList();
             } else if (data.type === 'log') {
-                const logData = data.message;
-                const logElement = document.createElement('p');
-                const now = new Date(data.timestamp);
-                const timestamp = `${now.getMonth() + 1}/${now.getDate()} ${now.toLocaleTimeString()}`;
-                
-                let messageText = `[${timestamp}]`;
-                // if (data.exchange) { // This is the line that adds the exchange prefix
-                //     messageText += ` [${data.exchange}]`;
-                // }
-                messageText += ` ${logData.status}`;
-
-                if (logData.symbol) {
-                    messageText += ` - ${logData.symbol}`;
-                }
-                if (logData.message) {
-                    messageText += ` - ${logData.message}`;
-                }
-                if (logData.side) {
-                    messageText += ` (${logData.side})`
-                }
-                if (logData.price) {
-                    messageText += ` | Price: ${parseFloat(logData.price.toPrecision(8))}`;
-                }
-                if (logData.amount) {
-                    messageText += ` | Amount: ${parseFloat(logData.amount.toPrecision(8))}`;
-                }
-                if (logData.order_id) {
-                    messageText += ` | Order ID: ${logData.order_id}`;
-                }
-                if (logData.reason) {
-                    messageText += ` | Reason: ${logData.reason}`;
-                }
-
-                logElement.textContent = messageText;
-                logsContainer.insertBefore(logElement, logsContainer.firstChild);
+                cachedLogs.unshift(data);
+                updateLogsList();
             } else if (data.type === 'reference_price_info') {
                 updateReferencePriceInfo(data.time);
             } else {
@@ -207,6 +175,8 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
         updateTotalValue();
+        updateOrdersList();
+        updateLogsList();
     }
 
     function updateCryptoCard(data) {
@@ -293,23 +263,26 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    function updateOrdersList(orders) {
+    function updateOrdersList() {
         const checkedOrderIds = new Set();
         ordersContainer.querySelectorAll('.order-checkbox:checked').forEach(checkbox => {
             checkedOrderIds.add(checkbox.dataset.orderId);
         });
 
-        ordersContainer.innerHTML = ""; 
+        ordersContainer.innerHTML = "";
+        
+        const filteredOrders = cachedOrders.filter(order => order.exchange === activeExchange);
 
-        if (orders.length === 0) {
+        if (filteredOrders.length === 0) {
             ordersContainer.innerHTML = "<p>현재 활성화된 주문이 없습니다.</p>";
             return;
         }
 
-        orders.sort((a, b) => b.timestamp - a.timestamp).forEach(order => {
+        filteredOrders.sort((a, b) => b.timestamp - a.timestamp).forEach(order => {
             const orderCard = document.createElement("div");
             orderCard.className = "crypto-card";
             orderCard.dataset.orderId = order.id;
+            orderCard.dataset.exchange = order.exchange;
             const baseSymbol = order.symbol.replace('USDT', '').replace('/', '');
             const currentPrice = currentPrices[baseSymbol];
             
@@ -326,6 +299,46 @@ document.addEventListener("DOMContentLoaded", () => {
                     card.classList.add('selected');
                 }
             }
+        });
+    }
+
+    function updateLogsList() {
+        logsContainer.innerHTML = "";
+        const filteredLogs = cachedLogs.filter(log => log.exchange === activeExchange);
+
+        filteredLogs.forEach(data => {
+            const logData = data.message;
+            const logElement = document.createElement('p');
+            const now = new Date(data.timestamp);
+            const timestamp = `${now.getMonth() + 1}/${now.getDate()} ${now.toLocaleTimeString()}`;
+            
+            let messageText = `[${timestamp}]`;
+            messageText += ` ${logData.status}`;
+
+            if (logData.symbol) {
+                messageText += ` - ${logData.symbol}`;
+            }
+            if (logData.message) {
+                messageText += ` - ${logData.message}`;
+            }
+            if (logData.side) {
+                messageText += ` (${logData.side})`
+            }
+            if (logData.price) {
+                messageText += ` | Price: ${parseFloat(logData.price.toPrecision(8))}`;
+            }
+            if (logData.amount) {
+                messageText += ` | Amount: ${parseFloat(logData.amount.toPrecision(8))}`;
+            }
+            if (logData.order_id) {
+                messageText += ` | Order ID: ${logData.order_id}`;
+            }
+            if (logData.reason) {
+                messageText += ` | Reason: ${logData.reason}`;
+            }
+
+            logElement.textContent = messageText;
+            logsContainer.appendChild(logElement);
         });
     }
 

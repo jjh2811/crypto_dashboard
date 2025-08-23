@@ -12,6 +12,11 @@
         "user_data_ws_url": "wss://ws-api.testnet.binance.vision/ws-api/v3",
         "whitelist": ["BTC", "USDT"]
       }
+    },
+    "upbit": {
+      "price_ws_url": "wss://api.upbit.com/websocket/v1",
+      "user_data_ws_url": "wss://api.upbit.com/websocket/v1/private",
+      "quote_currency": "KRW"
     }
   }
 }
