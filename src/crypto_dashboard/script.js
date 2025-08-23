@@ -344,18 +344,19 @@ document.addEventListener("DOMContentLoaded", () => {
         const sideClass = order.side.toLowerCase() === 'buy' ? 'side-buy' : 'side-sell';
         const orderDate = new Date(order.timestamp).toLocaleString();
         
-        let priceDiffHtml = '<p class="price-diff">-</p>';
+        const quoteCurrency = order.quote_currency || 'USDT';
+
+        let priceDiffText = '-';
+        let diffClass = '';
         if (currentPrice) {
             const priceDiff = currentPrice > 0 ? ((order.price - currentPrice) / currentPrice) * 100 : 0;
             
-            let diffClass;
             if (order.side.toLowerCase() === 'buy') {
                 diffClass = priceDiff > 0 ? 'side-buy' : 'side-sell';
             } else { // SELL
                 diffClass = priceDiff < 0 ? 'side-buy' : 'side-sell';
             }
-
-            priceDiffHtml = `<p class="price-diff ${diffClass}">Diff: ${priceDiff.toFixed(2)}%</p>`;
+            priceDiffText = `${priceDiff.toFixed(2)}%`;
         }
 
         const amount = parseFloat(order.amount) || 0;
@@ -367,15 +368,37 @@ document.addEventListener("DOMContentLoaded", () => {
                 <h2 style="margin: 0; flex-grow: 1; text-align: center;">${baseSymbol}</h2>
                 <input type="checkbox" class="order-checkbox" data-order-id="${order.id}" data-symbol="${order.symbol}">
             </div>
-            <p class="side ${sideClass}">${order.side}</p>
-            <p class="price">Price: ${formatNumber(order.price)}</p>
-            ${priceDiffHtml}
-            <p class="amount">Amount: ${formatNumber(filled)} / ${formatNumber(amount)}</p>
+            <div class="info-row">
+                <span class="info-label">Side:</span>
+                <span class="info-value ${sideClass}">${order.side}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Price:</span>
+                <span class="info-value">${formatNumber(order.price)}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Market:</span>
+                <span class="info-value">${quoteCurrency}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Diff:</span>
+                <span class="info-value ${diffClass}">${priceDiffText}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Amount:</span>
+                <span class="info-value">${formatNumber(filled)} / ${formatNumber(amount)}</span>
+            </div>
             <div class="progress-bar-container">
                 <div class="progress-bar" style="width: ${progress}%;"></div>
             </div>
-            <p class="value">Value: ${parseFloat(order.value).toFixed(3)}</p>
-            <p class="date">${orderDate}</p>
+            <div class="info-row">
+                <span class="info-label">Value:</span>
+                <span class="info-value">${parseFloat(order.value).toFixed(3)}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Date:</span>
+                <span class="info-value">${orderDate}</span>
+            </div>
         `;
     }
 
