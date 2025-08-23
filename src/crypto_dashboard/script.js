@@ -278,10 +278,17 @@ document.addEventListener("DOMContentLoaded", () => {
             const priceDiffElement = card.querySelector('.price-diff');
 
             if (currentPrice && priceDiffElement) {
-                const priceDiff = ((order.price - currentPrice) / currentPrice) * 100;
-                const diffClass = priceDiff >= 0 ? 'side-buy' : 'side-sell';
+                const priceDiff = currentPrice > 0 ? ((order.price - currentPrice) / currentPrice) * 100 : 0;
+                
+                let diffClass;
+                if (order.side.toLowerCase() === 'buy') {
+                    diffClass = priceDiff > 0 ? 'side-buy' : 'side-sell';
+                } else { // SELL
+                    diffClass = priceDiff < 0 ? 'side-buy' : 'side-sell';
+                }
+
                 priceDiffElement.className = `price-diff ${diffClass}`;
-                priceDiffElement.textContent = `Diff: ${priceDiff.toFixed(3)}%`;
+                priceDiffElement.textContent = `Diff: ${priceDiff.toFixed(2)}%`;
             }
         });
     }
@@ -320,6 +327,56 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
         });
+    }
+
+    function formatNumber(num) {
+        if (typeof num !== 'number' || !isFinite(num)) return num;
+        let numStr = num.toFixed(8);
+        if (numStr.includes('.')) {
+            numStr = numStr.replace(/0+$/, '');
+            numStr = numStr.replace(/\.$/, '');
+        }
+        return numStr;
+    }
+
+    function createOrderCardHTML(order, currentPrice) {
+        const baseSymbol = order.symbol.replace('USDT', '').replace('/', '');
+        const sideClass = order.side.toLowerCase() === 'buy' ? 'side-buy' : 'side-sell';
+        const orderDate = new Date(order.timestamp).toLocaleString();
+        
+        let priceDiffHtml = '<p class="price-diff">-</p>';
+        if (currentPrice) {
+            const priceDiff = currentPrice > 0 ? ((order.price - currentPrice) / currentPrice) * 100 : 0;
+            
+            let diffClass;
+            if (order.side.toLowerCase() === 'buy') {
+                diffClass = priceDiff > 0 ? 'side-buy' : 'side-sell';
+            } else { // SELL
+                diffClass = priceDiff < 0 ? 'side-buy' : 'side-sell';
+            }
+
+            priceDiffHtml = `<p class="price-diff ${diffClass}">Diff: ${priceDiff.toFixed(2)}%</p>`;
+        }
+
+        const amount = parseFloat(order.amount) || 0;
+        const filled = parseFloat(order.filled) || 0;
+        const progress = amount > 0 ? (filled / amount) * 100 : 0;
+
+        return `
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <h2 style="margin: 0; flex-grow: 1; text-align: center;">${baseSymbol}</h2>
+                <input type="checkbox" class="order-checkbox" data-order-id="${order.id}" data-symbol="${order.symbol}">
+            </div>
+            <p class="side ${sideClass}">${order.side}</p>
+            <p class="price">Price: ${formatNumber(order.price)}</p>
+            ${priceDiffHtml}
+            <p class="amount">Amount: ${formatNumber(filled)} / ${formatNumber(amount)}</p>
+            <div class="progress-bar-container">
+                <div class="progress-bar" style="width: ${progress}%;"></div>
+            </div>
+            <p class="value">Value: ${parseFloat(order.value).toFixed(3)}</p>
+            <p class="date">${orderDate}</p>
+        `;
     }
 
     function createCryptoCardHTML(data) {
@@ -383,40 +440,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 <span class="info-label">Share:</span>
                 <span class="info-value">-</span>
             </div>
-        `;
-    }
-
-    function createOrderCardHTML(order, currentPrice) {
-        const baseSymbol = order.symbol.replace('USDT', '').replace('/', '');
-        const sideClass = order.side.toLowerCase() === 'buy' ? 'side-buy' : 'side-sell';
-        const orderDate = new Date(order.timestamp).toLocaleString();
-        
-        let priceDiffHtml = '<p class="price-diff">-</p>';
-        if (currentPrice) {
-            const priceDiff = ((order.price - currentPrice) / currentPrice) * 100;
-            const diffClass = priceDiff >= 0 ? 'side-buy' : 'side-sell';
-            priceDiffHtml = `<p class="price-diff ${diffClass}">Diff: ${priceDiff.toFixed(2)}%</p>`;
-        }
-
-        const amount = parseFloat(order.amount) || 0;
-        const filled = parseFloat(order.filled) || 0;
-        const remaining = amount - filled;
-        const progress = amount > 0 ? (filled / amount) * 100 : 0;
-
-        return `
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-                <h2 style="margin: 0;">${baseSymbol}</h2>
-                <input type="checkbox" class="order-checkbox" data-order-id="${order.id}" data-symbol="${order.symbol}">
-            </div>
-            <p class="side ${sideClass}">${order.side} (${order.status})</p>
-            <p class="price">Price: ${parseFloat(order.price)}</p>
-            ${priceDiffHtml}
-            <p class="amount">Amount: ${remaining.toFixed(8)} / ${amount.toFixed(8)}</p>
-            <div class="progress-bar-container">
-                <div class="progress-bar" style="width: ${progress}%;"></div>
-            </div>
-            <p class="value">Value: ${parseFloat(order.value).toFixed(3)}</p>
-            <p class="date">${orderDate}</p>
         `;
     }
 

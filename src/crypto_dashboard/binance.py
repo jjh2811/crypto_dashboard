@@ -319,8 +319,8 @@ class BinanceExchange:
                                 self.balances_cache[symbol]['price'] = Decimal(price)
                                 update_message = self.create_balance_update_message(symbol, self.balances_cache[symbol])
                             else:
-                                update_message = {'type':'balance_update', 'exchange': self.name, 'symbol': symbol, 'price': float(Decimal(price)), 'quote_currency': self.quote_currency}
-
+                                update_message = {'symbol': symbol, 'price': float(Decimal(price))}
+                            
                             await self.app['broadcast_message'](update_message)
                         elif 'result' in data and data.get('result') is None:
                             self.logger.info(f"Subscription response received: {data}")
