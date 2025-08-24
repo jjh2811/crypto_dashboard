@@ -11,6 +11,7 @@ dependencies = [
     "aiohttp>=3.12.15",
     "ccxt>=4.4.99",
     "cryptography>=45.0.6",
+    "pyjwt>=2.10.1",
     "websockets>=15.0.1",
 ]
 

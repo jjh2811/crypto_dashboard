@@ -578,9 +578,7 @@ class BinanceExchange:
             await self.exchange.cancel_order(order_id, symbol)
             self.logger.info(f"Successfully sent cancel request for order {order_id}")
             await self.app['broadcast_log']({'status': 'Cancelling', 'symbol': symbol, 'order_id': order_id}, self.name)
-            if order_id in self.orders_cache:
-                del self.orders_cache[order_id]
-            await self.update_subscriptions_if_needed()
+            # The websocket event will trigger the cache update and subscription update.
         except Exception as e:
             self.logger.error(f"Failed to cancel order {order_id}: {e}")
             await self.app['broadcast_log']({'status': 'Cancel Failed', 'symbol': symbol, 'order_id': order_id, 'reason': str(e)}, self.name)
@@ -607,7 +605,8 @@ class BinanceExchange:
                 self.logger.error(f"Failed to cancel order {order_id}: {e}")
                 await self.app['broadcast_log']({'status': 'Cancel Failed', 'symbol': symbol, 'order_id': order_id, 'reason': str(e)}, self.name)
 
-        self.orders_cache.clear()
+        # The websocket events will trigger the cache updates and subscription updates.
+        self.orders_cache.clear() # Clearing cache immediately for UI responsiveness
 
     async def close(self) -> None:
         await self.exchange.close()
