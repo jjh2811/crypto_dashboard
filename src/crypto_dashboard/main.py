@@ -275,9 +275,12 @@ async def on_startup(app):
         logger.error("No exchanges configured in config.json")
         return
 
+    init_tasks = []
+    pending_exchanges = []
+
     for exchange_name, exchange_config in exchanges_config.items():
         try:
-            logger.info(f"Initializing exchange: {exchange_name}")
+            logger.info(f"Preparing to initialize exchange: {exchange_name}")
             
             testnet = exchange_config.get('testnet', {}).get('use', False)
             api_key_section = f"{exchange_name}_testnet" if testnet else exchange_name
@@ -300,27 +303,36 @@ async def on_startup(app):
             exchange_class = getattr(module, class_name)
 
             exchange_instance = exchange_class(api_key, secret_key, app, exchange_name)
-            await exchange_instance.get_initial_data()
-
-            app['exchanges'][exchange_name] = exchange_instance
-
-            price_ws_task = asyncio.create_task(exchange_instance.connect_price_ws())
-            user_data_ws_task = asyncio.create_task(exchange_instance.connect_user_data_ws())
-            app['exchange_tasks'].extend([price_ws_task, user_data_ws_task])
             
-            logger.info(f"Successfully initialized and connected to {exchange_name}.")
+            init_tasks.append(exchange_instance.get_initial_data())
+            pending_exchanges.append(exchange_instance)
 
         except (FileNotFoundError, KeyError) as e:
-            logger.error(f"Could not initialize {exchange_name} exchange due to missing secrets or config: {e}")
-            continue
+            logger.error(f"Could not prepare {exchange_name} exchange due to missing secrets or config: {e}")
         except (ModuleNotFoundError, AttributeError) as e:
             logger.error(f"Could not load exchange module for '{exchange_name}': {e}")
-            continue
         except Exception as e:
-            logger.error(f"Error during {exchange_name} exchange initialization: {e}")
-            continue
+            logger.error(f"Error during {exchange_name} exchange preparation: {e}")
 
-    logger.info("User data stream task started.")
+    if not init_tasks:
+        logger.warning("No exchanges were prepared for initialization.")
+        return
+
+    logger.info(f"Initializing {len(init_tasks)} exchanges concurrently...")
+    results = await asyncio.gather(*init_tasks, return_exceptions=True)
+
+    for instance, result in zip(pending_exchanges, results):
+        exchange_name = instance.name
+        if isinstance(result, Exception):
+            logger.error(f"Error during {exchange_name} exchange initialization: {result}")
+        else:
+            app['exchanges'][exchange_name] = instance
+            price_ws_task = asyncio.create_task(instance.connect_price_ws())
+            user_data_ws_task = asyncio.create_task(instance.connect_user_data_ws())
+            app['exchange_tasks'].extend([price_ws_task, user_data_ws_task])
+            logger.info(f"Successfully initialized and connected to {exchange_name}.")
+
+    logger.info("All exchange initializations complete.")
 
 async def on_shutdown(app):
     logger.info("Shutdown signal received. Closing client connections...")
