@@ -5,7 +5,7 @@ import json
 import logging
 import time
 import os
-from typing import Any, Dict, List, Optional, Protocol, TypedDict, cast
+from typing import Any, Dict, List, Optional, cast
 
 from aiohttp import web
 from ccxt.async_support import binance
@@ -15,43 +15,8 @@ from websockets.exceptions import ConnectionClosed, ConnectionClosedError
 from websockets.legacy.client import WebSocketClientProtocol, connect
 from websockets.protocol import State
 
-
-class Balances(TypedDict):
-    info: Dict[str, Any]
-    free: Dict[str, float]
-    used: Dict[str, float]
-    total: Dict[str, float]
-
-
-class Order(TypedDict):
-    id: str
-    symbol: str
-    side: str
-    price: float
-    amount: float
-    value: float
-    timestamp: int
-    status: str
-
-
-class ExchangeProtocol(Protocol):
-    apiKey: str
-    secret: str
-
-    async def fetch_balance(self, *args, **kwargs) -> Balances:
-        ...
-
-    async def fetch_open_orders(self, *args, **kwargs) -> List[Order]:
-        ...
-
-    async def cancel_order(self, order_id: str, symbol: str) -> Any:
-        ...
-
-    async def fetch_closed_orders(self, *args, **kwargs) -> List[Order]:
-        ...
-
-    async def close(self) -> None:
-        ...
+from .exchange_utils import calculate_average_buy_price
+from .protocols import ExchangeProtocol
 
 
 class BinanceExchange:
@@ -170,7 +135,7 @@ class BinanceExchange:
                 self.logger.info(f"Testnet mode: Filtering balances with whitelist {self.whitelist}. Kept: {list(total_balances.keys())} from {original_assets}")
 
             for asset, total_amount in total_balances.items():
-                avg_buy_price, realised_pnl = await self.calculate_average_buy_price(asset, Decimal(str(total_amount)))
+                avg_buy_price, realised_pnl = await calculate_average_buy_price(self.exchange, asset, Decimal(str(total_amount)), self.quote_currency, self.logger)
                 free_amount = Decimal(str(balance.get('free', {}).get(asset, 0)))
                 locked_amount = Decimal(str(balance.get('used', {}).get(asset, 0)))
                 self.balances_cache[asset] = {
@@ -191,69 +156,6 @@ class BinanceExchange:
         holding_assets = set(self.balances_cache.keys())
         order_assets = {o['symbol'].replace(self.quote_currency, '').replace('/', '') for o in self.orders_cache.values()}
         self.tracked_assets = holding_assets | order_assets
-
-    async def calculate_average_buy_price(self, asset: str, current_amount: Decimal) -> tuple[Optional[Decimal], Optional[Decimal]]:
-        if asset == self.quote_currency or current_amount <= 0:
-            return None, None
-
-        symbol = f"{asset}/{self.quote_currency}"
-        try:
-            trade_history = await self.exchange.fetch_closed_orders(symbol=symbol)
-            if not trade_history:
-                return None, None
-
-            sorted_trades = sorted(trade_history, key=lambda x: x.get('timestamp', 0))
-
-            running_amount = current_amount
-            start_index = -1
-
-            for i in range(len(sorted_trades) - 1, -1, -1):
-                trade = sorted_trades[i]
-                side = trade.get('side')
-                filled = Decimal(str(trade.get('filled', '0')))
-
-                if side == 'sell':
-                    running_amount += filled
-                elif side == 'buy':
-                    running_amount -= filled
-
-                if running_amount == Decimal('0'):
-                    start_index = i
-                    break
-
-            if start_index == -1:
-                return None, None
-
-            total_cost = Decimal('0')
-            total_amount_bought = Decimal('0')
-            realised_pnl = Decimal('0')
-            
-            for i in range(start_index, len(sorted_trades)):
-                trade = sorted_trades[i]
-                side = trade.get('side')
-                filled = Decimal(str(trade.get('filled', '0')))
-                price = Decimal(str(trade.get('price', '0')))
-
-                if side == 'buy':
-                    total_cost += filled * price
-                    total_amount_bought += filled
-                elif side == 'sell':
-                    avg_buy_price = total_cost / total_amount_bought if total_amount_bought > 0 else Decimal('0')
-                    if avg_buy_price > 0:
-                        realised_pnl += (price - avg_buy_price) * filled
-                        total_cost -= avg_buy_price * filled
-                        total_amount_bought -= filled
-
-
-            if total_amount_bought > Decimal('0'):
-                avg_buy_price = total_cost / total_amount_bought
-                return avg_buy_price, realised_pnl
-
-            return None, realised_pnl
-
-        except Exception as e:
-            self.logger.error(f"Error calculating average buy price for {asset}: {e}", exc_info=True)
-            return None, None
 
     async def _logon(self, wscp: WebSocketClientProtocol) -> None:
         try:
@@ -412,7 +314,7 @@ class BinanceExchange:
                                     if has_changed:
                                         self.logger.info(f"Balance for {asset} updated. Free: {free_amount}, Locked: {locked_amount}")
                                         if 'avg_buy_price' not in self.balances_cache[asset]:
-                                             avg_buy_price, realised_pnl = await self.calculate_average_buy_price(asset, total_amount)
+                                             avg_buy_price, realised_pnl = await calculate_average_buy_price(self.exchange, asset, total_amount, self.quote_currency, self.logger)
                                              self.balances_cache[asset]['avg_buy_price'] = avg_buy_price
                                              self.balances_cache[asset]['realised_pnl'] = realised_pnl
 
