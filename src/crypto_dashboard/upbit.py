@@ -109,7 +109,7 @@ class UpbitExchange:
         request = [
             {"ticket": str(uuid.uuid4())},
             {"type": "ticker", "codes": codes_to_send, "isOnlyRealtime": True},
-            {"format": "SIMPLE_LIST"}
+            {"format": "SIMPLE"}
         ]
 
         await websocket.send(json.dumps(request))
