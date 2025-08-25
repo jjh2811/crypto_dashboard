@@ -44,7 +44,7 @@ class UpbitExchange:
         self.app = app
         self.balances_cache: Dict[str, Dict[str, Any]] = {}
         self.orders_cache: Dict[str, Dict[str, Any]] = {}
-        self.wscp: Optional[WebSocketClientProtocol] = None
+        self.userdata_ws: Optional[WebSocketClientProtocol] = None
         self.price_ws: Optional[WebSocketClientProtocol] = None
         self.price_ws_ready = asyncio.Event()
         self.tracked_assets = set()
@@ -227,7 +227,7 @@ class UpbitExchange:
             try:
                 headers = self._get_auth_headers()
                 async with connect(self.user_data_ws_url, extra_headers=headers) as websocket:
-                    self.wscp = websocket
+                    self.userdata_ws = websocket
                     self.logger.info("Upbit User Data Stream connection established.")
 
                     # 구독 요청 메시지 전송
@@ -363,11 +363,11 @@ class UpbitExchange:
 
             except ConnectionClosed:
                 self.logger.warning("Upbit User Data Stream connection closed. Reconnecting in 5 seconds...")
-                self.wscp = None
+                self.userdata_ws = None
                 await asyncio.sleep(5)
             except Exception as e:
                 self.logger.error(f"Error in Upbit User Data Stream: {e}", exc_info=True)
-                self.wscp = None
+                self.userdata_ws = None
                 await asyncio.sleep(5)
 
     async def update_subscriptions_if_needed(self) -> None:

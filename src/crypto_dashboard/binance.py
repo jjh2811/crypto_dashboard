@@ -55,7 +55,7 @@ class BinanceExchange:
         self.app = app
         self.balances_cache: Dict[str, Dict[str, Any]] = {}
         self.orders_cache: Dict[str, Dict[str, Any]] = {}
-        self.wscp: Optional[WebSocketClientProtocol] = None
+        self.userdata_ws: Optional[WebSocketClientProtocol] = None
         self.price_ws: Optional[WebSocketClientProtocol] = None
         self.price_ws_ready = asyncio.Event()
         self.tracked_assets = set()
@@ -157,7 +157,7 @@ class BinanceExchange:
         order_assets = {o['symbol'].replace(self.quote_currency, '').replace('/', '') for o in self.orders_cache.values()}
         self.tracked_assets = holding_assets | order_assets
 
-    async def _logon(self, wscp: WebSocketClientProtocol) -> None:
+    async def _logon(self, userdata_ws: WebSocketClientProtocol) -> None:
         try:
             private_key = serialization.load_pem_private_key(
                 self.exchange.secret.encode('utf-8'),
@@ -179,19 +179,19 @@ class BinanceExchange:
                     "signature": signature,
                 },
             }
-            await wscp.send(json.dumps(logon_request))
+            await userdata_ws.send(json.dumps(logon_request))
             self.logger.info("Logon request sent.")
         except Exception as e:
             self.logger.error(f"Error during logon: {e}", exc_info=True)
             raise
 
-    async def _subscribe(self, wscp: WebSocketClientProtocol) -> None:
+    async def _subscribe(self, userdata_ws: WebSocketClientProtocol) -> None:
         subscribe_request = {
             "id": "subscribe_request",
             "method": "userDataStream.subscribe",
             "params": {}
         }
-        await wscp.send(json.dumps(subscribe_request))
+        await userdata_ws.send(json.dumps(subscribe_request))
         self.logger.info("User data stream subscribe request sent.")
 
     async def connect_price_ws(self) -> None:
@@ -251,7 +251,7 @@ class BinanceExchange:
         while True:
             try:
                 async with connect(self.user_data_ws_url) as websocket:
-                    self.wscp = websocket
+                    self.userdata_ws = websocket
                     await self._logon(websocket)
 
                     while True:
@@ -433,11 +433,11 @@ class BinanceExchange:
 
             except ConnectionClosed:
                 self.logger.warning("User Data Stream connection closed. Reconnecting in 5 seconds...")
-                self.wscp = None
+                self.userdata_ws = None
                 await asyncio.sleep(5)
             except Exception as e:
                 self.logger.error(f"Error in User Data Stream fetcher: {e}", exc_info=True)
-                self.wscp = None
+                self.userdata_ws = None
                 await asyncio.sleep(5)
 
     async def update_subscriptions_if_needed(self) -> None:
