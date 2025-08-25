@@ -23,16 +23,16 @@ class ExchangeProtocol(Protocol):
     apiKey: str
     secret: str
 
-    async def fetch_balance(self, *args, **kwargs) -> Balances:
+    async def fetch_balance(self, params: Dict[str, Any] = {}) -> Balances:
         ...
 
-    async def fetch_open_orders(self, *args, **kwargs) -> List[Order]:
+    async def fetch_open_orders(self, symbol: str | None = None, since: int | None = None, limit: int | None = None, params: Dict[str, Any] = {}) -> List[Order]:
         ...
 
-    async def cancel_order(self, order_id: str, symbol: str) -> Any:
+    async def cancel_order(self, order_id: str, symbol: str | None = None, params: Dict[str, Any] = {}) -> Any:
         ...
 
-    async def fetch_closed_orders(self, *args, **kwargs) -> List[Order]:
+    async def fetch_closed_orders(self, symbol: str | None = None, since: int | None = None, limit: int | None = None, params: Dict[str, Any] = {}) -> List[Order]:
         ...
 
     async def close(self) -> None:
