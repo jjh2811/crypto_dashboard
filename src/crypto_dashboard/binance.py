@@ -2,10 +2,8 @@ import asyncio
 import base64
 from decimal import Decimal
 import json
-import logging
 import time
-import os
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, cast
 
 from aiohttp import web
 from ccxt.async_support import binance
@@ -17,7 +15,7 @@ from websockets.protocol import State
 
 from .exchange_base import ExchangeBase
 from .exchange_utils import calculate_average_buy_price
-from .protocols import ExchangeProtocol, Balances
+from .protocols import Balances, ExchangeProtocol
 
 
 class BinanceExchange(ExchangeBase):
@@ -43,7 +41,7 @@ class BinanceExchange(ExchangeBase):
 
         if self.testnet:
             exchange.set_sandbox_mode(True)
-        
+
         return cast(ExchangeProtocol, exchange)
 
     async def _process_initial_balances(self, balance: Balances, total_balances: Dict[str, float]):
@@ -371,4 +369,3 @@ class BinanceExchange(ExchangeBase):
             self.tracked_assets = required_assets
             if to_add or to_remove:
                 self.logger.info(f"Subscription updated. Added: {to_add}, Removed: {to_remove}. Current: {required_assets}")
-

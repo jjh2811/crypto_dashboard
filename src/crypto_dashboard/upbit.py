@@ -1,13 +1,11 @@
 import asyncio
 from decimal import Decimal
 import json
-import logging
+from typing import Any, Dict, cast
 import uuid
-import jwt
-from typing import Any, Dict, Optional, cast
 
-from aiohttp import web
 from ccxt.async_support import upbit
+import jwt
 from websockets.exceptions import ConnectionClosed, ConnectionClosedError
 from websockets.legacy.client import WebSocketClientProtocol, connect
 from websockets.protocol import State

@@ -1,12 +1,12 @@
-from decimal import Decimal
 import asyncio
-import os
+from datetime import datetime, timezone
+import importlib
 import json
 import logging
-import importlib
-from datetime import datetime, timezone
-from aiohttp import web
+import os
 import secrets
+
+from aiohttp import web
 
 
 SECRET_TOKEN = secrets.token_hex(32)
@@ -160,7 +160,7 @@ async def handle_websocket(request):
             for symbol, data in exchange.balances_cache.items():
                 update_message = exchange.create_balance_update_message(symbol, data)
                 await ws.send_json(update_message)
-            
+
             if exchange.orders_cache:
                 orders_with_exchange = []
                 for order in exchange.orders_cache.values():
@@ -180,20 +180,20 @@ async def handle_websocket(request):
                 except ConnectionResetError:
                     logger.warning("Failed to send cached logs to a newly connected client.")
                     break
-        
+
         async for msg in ws:
             if msg.type == web.WSMsgType.TEXT:
                 try:
                     data = json.loads(msg.data)
                     msg_type = data.get('type')
-                    
+
                     exchanges = app.get('exchanges', {})
                     exchange_name = data.get('exchange')
 
                     if not exchanges or not exchange_name or exchange_name not in exchanges:
                         logger.error(f"Invalid exchange specified or no exchanges initialized. Cannot process order cancellation. Exchange: {exchange_name}")
                         continue
-                    
+
                     exchange = exchanges[exchange_name]
 
                     if msg_type == 'cancel_orders':
@@ -202,7 +202,7 @@ async def handle_websocket(request):
                         for order in orders_to_cancel:
                             await exchange.cancel_order(order['id'], order['symbol'])
                         # The broadcast will be triggered by the user data stream update
-                    
+
                     elif msg_type == 'cancel_all_orders':
                         logger.info(f"Received request to cancel all orders on {exchange.name}.")
                         await exchange.cancel_all_orders()
@@ -222,13 +222,13 @@ async def handle_websocket(request):
             app['reference_prices'] = {}
             for exchange_name, exchange in app['exchanges'].items():
                 exchange_reference_prices = {
-                    symbol: float(data['price']) 
-                    for symbol, data in exchange.balances_cache.items() 
+                    symbol: float(data['price'])
+                    for symbol, data in exchange.balances_cache.items()
                     if 'price' in data and symbol != exchange.quote_currency
                 }
                 if exchange_reference_prices:
                     app['reference_prices'][exchange_name] = exchange_reference_prices
-            
+
             if app['reference_prices']:
                 app['reference_time'] = datetime.now(timezone.utc).isoformat()
                 logger.info(f"Reference prices saved at {app['reference_time']} for {list(app['reference_prices'].keys())}")
@@ -281,7 +281,7 @@ async def on_startup(app):
     for exchange_name, exchange_config in exchanges_config.items():
         try:
             logger.info(f"Preparing to initialize exchange: {exchange_name}")
-            
+
             testnet = exchange_config.get('testnet', {}).get('use', False)
             api_key_section = f"{exchange_name}_testnet" if testnet else exchange_name
 
@@ -298,12 +298,12 @@ async def on_startup(app):
 
             module_name = f".{exchange_name}"
             class_name = f"{exchange_name.capitalize()}Exchange"
-            
+
             module = importlib.import_module(module_name, package=__package__)
             exchange_class = getattr(module, class_name)
 
             exchange_instance = exchange_class(api_key, secret_key, app, exchange_name)
-            
+
             init_tasks.append(exchange_instance.get_initial_data())
             pending_exchanges.append(exchange_instance)
 
@@ -387,7 +387,7 @@ def main():
         host = 'localhost'
         port = 8000
         logger.warning("config.json not found, defaulting to host 'localhost' and port 8000")
-    
+
     app = init_app()
     logger.info(f"Attempting to start server on http://{host}:{port}")
     web.run_app(app, host=host, port=port, access_log=None)

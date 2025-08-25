@@ -23,5 +23,10 @@ packages = [{include = "crypto_dashboard", from = "src"}]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
+[dependency-groups]
+dev = [
+    "autopep8>=2.3.2",
+]
+
 [project.scripts]
 dashboard = "crypto_dashboard.main:main"

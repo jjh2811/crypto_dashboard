@@ -1,18 +1,16 @@
+from abc import ABC, abstractmethod
 import asyncio
 from decimal import Decimal
 import json
 import logging
 import os
 from typing import Any, Dict, Optional, cast
-from abc import ABC, abstractmethod
 
 from aiohttp import web
-from websockets.exceptions import ConnectionClosed, ConnectionClosedError
-from websockets.legacy.client import WebSocketClientProtocol, connect
-from websockets.protocol import State
+from websockets.legacy.client import WebSocketClientProtocol
 
 from .exchange_utils import calculate_average_buy_price
-from .protocols import ExchangeProtocol, Balances
+from .protocols import Balances, ExchangeProtocol
 
 
 class ExchangeBase(ABC):
@@ -23,10 +21,10 @@ class ExchangeBase(ABC):
 
         with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
             config = json.load(f)
-        
+
         exchange_config = config['exchanges'][self.name.lower()]
         self.quote_currency = exchange_config.get('quote_currency')
-        
+
         self._exchange = self._create_exchange_instance(api_key, secret_key, exchange_config)
 
         self.balances_cache: Dict[str, Dict[str, Any]] = {}
@@ -109,7 +107,7 @@ class ExchangeBase(ABC):
             total_balances = {
                 asset: total for asset, total in balance.get('total', {}).items() if total > 0
             }
-            
+
             await self._process_initial_balances(balance, total_balances)
 
         except Exception as e:
