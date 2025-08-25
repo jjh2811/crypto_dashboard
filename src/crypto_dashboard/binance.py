@@ -372,11 +372,3 @@ class BinanceExchange(ExchangeBase):
             if to_add or to_remove:
                 self.logger.info(f"Subscription updated. Added: {to_add}, Removed: {to_remove}. Current: {required_assets}")
 
-    async def cancel_order(self, order_id: str, symbol: str) -> None:
-        await super().cancel_order(order_id, symbol)
-        # The websocket event will trigger the cache update and subscription update.
-
-    async def cancel_all_orders(self) -> None:
-        await super().cancel_all_orders()
-        # The websocket events will trigger the cache updates and subscription updates.
-        self.orders_cache.clear() # Clearing cache immediately for UI responsiveness

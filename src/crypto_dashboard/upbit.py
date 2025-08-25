@@ -280,9 +280,3 @@ class UpbitExchange(ExchangeBase):
                 websocket = self.price_ws
                 if websocket and websocket.state == State.OPEN:
                     await self._send_price_subscription(websocket)
-
-    async def cancel_order(self, order_id: str, symbol: str) -> None:
-        await super().cancel_order(order_id, symbol)
-        if order_id in self.orders_cache:
-            del self.orders_cache[order_id]
-        # The websocket event for order cancellation will trigger the subscription update.
