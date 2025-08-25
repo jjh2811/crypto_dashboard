@@ -25,7 +25,7 @@ class BinanceExchange:
         self.logger = logging.getLogger(exchange_name)
         with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
             config = json.load(f)
-        
+
         binance_config = config['exchanges']['binance']
         testnet_config = binance_config.get('testnet', {})
         self.testnet = testnet_config.get('use', False)
@@ -57,7 +57,6 @@ class BinanceExchange:
         self.orders_cache: Dict[str, Dict[str, Any]] = {}
         self.userdata_ws: Optional[WebSocketClientProtocol] = None
         self.price_ws: Optional[WebSocketClientProtocol] = None
-        self.price_ws_ready = asyncio.Event()
         self.price_ws_connected_event = asyncio.Event()
         self.logon_successful_event = asyncio.Event()
         self.user_data_subscribed_event = asyncio.Event()
@@ -105,7 +104,7 @@ class BinanceExchange:
                 price_change_percent = (price - ref_price) / ref_price * 100
                 message['price_change_percent'] = float(price_change_percent)
                 message['reference_time'] = reference_time
-        
+
         return message
 
     async def get_initial_data(self) -> None:
@@ -155,7 +154,7 @@ class BinanceExchange:
             self.logger.error(f"Failed to fetch initial data from Binance: {e}")
             await self.exchange.close()
             raise
-        
+
         holding_assets = set(self.balances_cache.keys())
         order_assets = {o['symbol'].replace(self.quote_currency, '').replace('/', '') for o in self.orders_cache.values()}
         self.tracked_assets = holding_assets | order_assets
@@ -203,7 +202,6 @@ class BinanceExchange:
                 async with connect(self.price_ws_url) as websocket:
                     self.price_ws = websocket
                     self.logger.info("Price data websocket connection established.")
-                    self.price_ws_ready.set()
                     self.price_ws_connected_event.set()
 
                     if self.tracked_assets:
@@ -231,25 +229,21 @@ class BinanceExchange:
                                 update_message = self.create_balance_update_message(symbol, self.balances_cache[symbol])
                             else:
                                 update_message = {'symbol': symbol, 'price': float(Decimal(price))}
-                            
+
                             await self.app['broadcast_message'](update_message)
                         elif 'result' in data and data.get('result') is None:
                             self.logger.info(f"Subscription response received: {data}")
 
             except (ConnectionClosed, ConnectionClosedError):
                 self.logger.warning("Price data websocket connection closed. Reconnecting in 5 seconds...")
-                self.price_ws_ready.clear()
                 self.price_ws = None
                 await asyncio.sleep(5)
             except Exception as e:
                 self.logger.error(f"An error occurred in connect_price_ws: {e}", exc_info=True)
-                self.price_ws_ready.clear()
                 self.price_ws = None
                 await asyncio.sleep(5)
 
     async def connect_user_data_ws(self) -> None:
-        await self.price_ws_ready.wait()
-
         self.logger.info(f"Connecting to Binance User Data Stream: {self.user_data_ws_url}")
 
         while True:
@@ -280,11 +274,11 @@ class BinanceExchange:
                                     self.logger.error(f"Subscription failed: {data}")
                                     break
                             continue
-                        
+
                         if 'event' not in raw_data:
                             self.logger.warning(f"Received message without 'event' field: {raw_data}")
                             continue
-                        
+
                         data = raw_data['event']
                         event_type = data.get('e')
 
@@ -404,7 +398,7 @@ class BinanceExchange:
                                 if order_id in self.orders_cache:
                                     del self.orders_cache[order_id]
                                     self.logger.info(f"Order {order_id} ({symbol} {status}) removed from cache.")
-                                
+
                                 if status == 'FILLED':
                                     log_payload.update({'price': float(data.get('L', '0')), 'amount': float(last_executed_quantity)})
 
@@ -430,7 +424,7 @@ class BinanceExchange:
                                             new_avg_price = (old_cost + fill_cost) / new_total_amount
                                         else:
                                             new_avg_price = last_filled_price
-                                    
+
                                     self.balances_cache[asset]['avg_buy_price'] = new_avg_price
                                     self.balances_cache[asset]['total_amount'] = old_total_amount + last_executed_quantity
                                     self.logger.info(f"Average price for {asset} updated to {new_avg_price} by trade. Last fill: {last_executed_quantity} @ {last_filled_price}")

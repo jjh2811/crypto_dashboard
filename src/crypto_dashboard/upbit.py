@@ -24,7 +24,7 @@ class UpbitExchange:
         self.logger = logging.getLogger(exchange_name)
         with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
             config = json.load(f)
-        
+
         upbit_config = config['exchanges']['upbit']
         self.quote_currency = upbit_config.get('quote_currency', 'KRW')
 
@@ -46,7 +46,6 @@ class UpbitExchange:
         self.orders_cache: Dict[str, Dict[str, Any]] = {}
         self.userdata_ws: Optional[WebSocketClientProtocol] = None
         self.price_ws: Optional[WebSocketClientProtocol] = None
-        self.price_ws_ready = asyncio.Event()
         self.price_ws_connected_event = asyncio.Event()
         self.user_data_subscribed_event = asyncio.Event()
         self.tracked_assets = set()
@@ -69,7 +68,7 @@ class UpbitExchange:
     async def _send_price_subscription(self, websocket: WebSocketClientProtocol) -> None:
         """Constructs and sends a price subscription request to the websocket."""
         assets_to_subscribe = [f"{self.quote_currency}-{asset}" for asset in self.tracked_assets if asset != self.quote_currency]
-        
+
         # 구독할 자산이 없으면, 기존 구독을 취소하기 위해 빈 문자열을 포함한 리스트를 보냅니다.
         codes_to_send = assets_to_subscribe if assets_to_subscribe else ['']
 
@@ -119,7 +118,7 @@ class UpbitExchange:
                 price_change_percent = (price - ref_price) / ref_price * 100
                 message['price_change_percent'] = float(price_change_percent)
                 message['reference_time'] = reference_time
-        
+
         return message
 
     async def get_initial_data(self) -> None:
@@ -173,7 +172,6 @@ class UpbitExchange:
                 async with connect(self.price_ws_url) as websocket:
                     self.price_ws = websocket
                     self.logger.info("Upbit price data websocket connection established.")
-                    self.price_ws_ready.set()
                     self.price_ws_connected_event.set()
 
                     await self._send_price_subscription(websocket)
@@ -193,7 +191,7 @@ class UpbitExchange:
 
                                 if not symbol or not price:
                                     continue
-                                
+
                                 self.logger.debug(f"Price received: {symbol} = {price}")
 
                                 if symbol in self.balances_cache:
@@ -206,7 +204,7 @@ class UpbitExchange:
                                         'symbol': symbol,
                                         'price': float(price)
                                     }
-                                
+
                                 await self.app['broadcast_message'](update_message)
 
                         except (json.JSONDecodeError, UnicodeDecodeError):
@@ -215,12 +213,10 @@ class UpbitExchange:
 
             except (ConnectionClosed, ConnectionClosedError):
                 self.logger.warning("Upbit price data websocket connection closed. Reconnecting in 5 seconds...")
-                self.price_ws_ready.clear()
                 self.price_ws = None
                 await asyncio.sleep(5)
             except Exception as e:
                 self.logger.error(f"An error occurred in connect_price_ws for Upbit: {e}", exc_info=True)
-                self.price_ws_ready.clear()
                 self.price_ws = None
                 await asyncio.sleep(5)
 
@@ -269,11 +265,11 @@ class UpbitExchange:
                                         if not is_existing:
                                             self.logger.info(f"New asset detected: {asset}, free: {free_amount}, locked: {locked_amount}")
                                             self.balances_cache[asset] = {'price': Decimal('0')}
-                                        
+
                                         self.balances_cache[asset]['free'] = free_amount
                                         self.balances_cache[asset]['locked'] = locked_amount
                                         self.balances_cache[asset]['total_amount'] = total_amount
-                                        
+
                                         if 'avg_buy_price' not in self.balances_cache[asset]:
                                             avg_buy_price, realised_pnl = await calculate_average_buy_price(self.exchange, asset, total_amount, self.quote_currency, self.logger)
                                             self.balances_cache[asset]['avg_buy_price'] = avg_buy_price
@@ -281,7 +277,7 @@ class UpbitExchange:
 
                                         update_message = self.create_balance_update_message(asset, self.balances_cache[asset])
                                         await self.app['broadcast_message'](update_message)
-                                        
+
                                         if not is_existing:
                                             await self.update_subscriptions_if_needed()
 
@@ -307,7 +303,7 @@ class UpbitExchange:
                                 price = Decimal(str(data.get('p', '0')))
                                 amount = Decimal(str(data.get('v', '0')))
                                 filled = Decimal(str(data.get('ev', '0')))
-                                
+
                                 log_payload = {'status': status, 'symbol': symbol, 'side': side}
 
                                 if status in ['wait', 'watch']: # NEW
@@ -331,7 +327,7 @@ class UpbitExchange:
                                             'value': float(price * amount), 'quote_currency': self.quote_currency,
                                             'timestamp': data.get('otms'), 'status': status
                                         }
-                                    
+
                                     trade_volume = Decimal(str(data.get('v', '0')))
                                     trade_price = Decimal(str(data.get('p', '0')))
                                     log_payload.update({'price': float(trade_price), 'amount': float(trade_volume)})
@@ -353,7 +349,7 @@ class UpbitExchange:
                                 elif status in ['done', 'cancel']: # FILLED or CANCELED
                                     if order_id in self.orders_cache:
                                         del self.orders_cache[order_id]
-                                    
+
                                     if status == 'done':
                                         log_payload.update({'price': float(price), 'amount': float(amount)})
 
@@ -387,7 +383,7 @@ class UpbitExchange:
             if required_assets != self.tracked_assets:
                 self.logger.info(f"Subscription update required. Old: {self.tracked_assets}, New: {required_assets}")
                 self.tracked_assets = required_assets
-                
+
                 websocket = self.price_ws
                 if websocket and websocket.state == State.OPEN:
                     await self._send_price_subscription(websocket)
