@@ -58,6 +58,9 @@ class BinanceExchange:
         self.userdata_ws: Optional[WebSocketClientProtocol] = None
         self.price_ws: Optional[WebSocketClientProtocol] = None
         self.price_ws_ready = asyncio.Event()
+        self.price_ws_connected_event = asyncio.Event()
+        self.logon_successful_event = asyncio.Event()
+        self.user_data_subscribed_event = asyncio.Event()
         self.tracked_assets = set()
         self._ws_id_counter = 1
 
@@ -201,6 +204,7 @@ class BinanceExchange:
                     self.price_ws = websocket
                     self.logger.info("Price data websocket connection established.")
                     self.price_ws_ready.set()
+                    self.price_ws_connected_event.set()
 
                     if self.tracked_assets:
                         assets_to_subscribe = [asset for asset in self.tracked_assets if asset != 'USDT']
@@ -263,6 +267,7 @@ class BinanceExchange:
                             if data['id'] == 'logon_request':
                                 if data.get('status') == 200:
                                     self.logger.info("Logon successful.")
+                                    self.logon_successful_event.set()
                                     await self._subscribe(websocket)
                                 else:
                                     self.logger.error(f"Logon failed: {data}")
@@ -270,6 +275,7 @@ class BinanceExchange:
                             elif data['id'] == 'subscribe_request':
                                 if data.get('status') == 200:
                                     self.logger.info("User data stream subscription successful.")
+                                    self.user_data_subscribed_event.set()
                                 else:
                                     self.logger.error(f"Subscription failed: {data}")
                                     break

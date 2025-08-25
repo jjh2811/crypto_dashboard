@@ -330,6 +330,11 @@ async def on_startup(app):
             price_ws_task = asyncio.create_task(instance.connect_price_ws())
             user_data_ws_task = asyncio.create_task(instance.connect_user_data_ws())
             app['exchange_tasks'].extend([price_ws_task, user_data_ws_task])
+
+            await instance.price_ws_connected_event.wait()
+            if hasattr(instance, 'logon_successful_event'):
+                await instance.logon_successful_event.wait()
+            await instance.user_data_subscribed_event.wait()
             logger.info(f"Successfully initialized and connected to {exchange_name}.")
 
     logger.info("All exchange initializations complete.")

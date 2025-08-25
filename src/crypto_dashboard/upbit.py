@@ -47,6 +47,8 @@ class UpbitExchange:
         self.userdata_ws: Optional[WebSocketClientProtocol] = None
         self.price_ws: Optional[WebSocketClientProtocol] = None
         self.price_ws_ready = asyncio.Event()
+        self.price_ws_connected_event = asyncio.Event()
+        self.user_data_subscribed_event = asyncio.Event()
         self.tracked_assets = set()
         self._ws_id_counter = 1
 
@@ -172,6 +174,7 @@ class UpbitExchange:
                     self.price_ws = websocket
                     self.logger.info("Upbit price data websocket connection established.")
                     self.price_ws_ready.set()
+                    self.price_ws_connected_event.set()
 
                     await self._send_price_subscription(websocket)
 
@@ -229,6 +232,7 @@ class UpbitExchange:
                 async with connect(self.user_data_ws_url, extra_headers=headers) as websocket:
                     self.userdata_ws = websocket
                     self.logger.info("Upbit User Data Stream connection established.")
+                    self.user_data_subscribed_event.set()
 
                     # 구독 요청 메시지 전송
                     subscribe_request = [
