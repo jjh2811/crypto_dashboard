@@ -109,8 +109,10 @@ class BinanceExchange:
 
     async def get_initial_data(self) -> None:
         try:
-            balance = await self.exchange.fetch_balance()
-            open_orders = await self.exchange.fetch_open_orders()
+            balance, open_orders = await asyncio.gather(
+                self.exchange.fetch_balance(),
+                self.exchange.fetch_open_orders()
+            )
 
             for order in open_orders:
                 price = Decimal(str(order.get('price') or 0))
