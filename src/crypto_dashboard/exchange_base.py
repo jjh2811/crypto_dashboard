@@ -130,15 +130,15 @@ class ExchangeBase(ABC):
                 order_id = order.get('id')
                 if order_id:
                     self.orders_cache[order_id] = {
-                        'id': order_id, 'symbol': order.get('symbol'), 'side': order.get('side'),
+                        'id': order_id, 'symbol': order.get('symbol', ''), 'side': order.get('side'),
                         'price': float(price), 'amount': float(amount), 'value': float(price * amount),
-                        'quote_currency': order.get('symbol', '').split('/')[1] if order.get('symbol') and '/' in order.get('symbol', '') else self.quote_currency,
+                        'quote_currency': (lambda s: s.split('/')[1] if s and '/' in s else self.quote_currency)(order.get('symbol', '')),
                         'timestamp': order.get('timestamp'), 'status': order.get('status')
                     }
             self.logger.info(f"Fetched {len(open_orders)} open orders at startup.")
 
             total_balances = {
-                asset: total for asset, total in balance.get('total', {}).items() if total > 0
+                asset: float(Decimal(str(total))) for asset, total in balance.get('total', {}).items() if Decimal(str(total)) > 0
             }
 
             await self._process_initial_balances(balance, total_balances)
@@ -200,7 +200,7 @@ class ExchangeBase(ABC):
 
         for order in all_orders:
             order_id = order.get('id')
-            symbol = order.get('symbol')
+            symbol = order.get('symbol', '')
             if not order_id or not symbol:
                 continue
             try:
