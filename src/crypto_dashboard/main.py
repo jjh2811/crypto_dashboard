@@ -139,12 +139,12 @@ async def handle_websocket(request):
     app = request.app
     token = request.cookies.get("auth_token")
     if token != SECRET_TOKEN:
-        ws = web.WebSocketResponse()
+        ws = web.WebSocketResponse(heartbeat=25)
         await ws.prepare(request)
         await ws.close(code=1008, message=b'Authentication failed')
         return ws
 
-    ws = web.WebSocketResponse()
+    ws = web.WebSocketResponse(heartbeat=25)
     await ws.prepare(request)
 
     logger.info('Client connected.')

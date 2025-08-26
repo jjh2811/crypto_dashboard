@@ -1,7 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
     const cryptoContainer = document.getElementById("crypto-container");
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const websocket = new WebSocket(`${protocol}//${window.location.host}/ws`);
     const totalValueElement = document.getElementById("total-value");
     const ordersContainer = document.getElementById("orders-container");
     const logsContainer = document.getElementById("logs-container");
@@ -26,6 +24,85 @@ document.addEventListener("DOMContentLoaded", () => {
     const alertModalText = document.getElementById("alert-modal-text");
     const alertOkBtn = document.getElementById("alert-ok-btn");
 
+    let websocket;
+    let reconnectTimeout;
+    let pendingNlpCommand = null;
+
+    function connect() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        websocket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+        websocket.onopen = () => {
+            console.log("WebSocket connection established");
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+                reconnectTimeout = null;
+            }
+        };
+
+        websocket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'exchanges_list') {
+                    exchanges = data.data;
+                    createExchangeTabs();
+                    if (exchanges.length > 0) {
+                        setActiveExchange(exchanges[0]);
+                    }
+                } else if (data.type === 'balance_update') {
+                    updateCryptoCard(data);
+                } else if (data.type === 'remove_holding') {
+                    const card = document.getElementById(data.symbol);
+                    if (card) {
+                        card.remove();
+                        updateTotalValue();
+                    }
+                } else if (data.type === 'orders_update') {
+                    cachedOrders = data.data;
+                    updateOrdersList();
+                } else if (data.type === 'log') {
+                    cachedLogs.unshift(data);
+                    updateLogsList();
+                } else if (data.type === 'reference_price_info') {
+                    updateReferencePriceInfo(data.time);
+                } else if (data.type === 'nlp_trade_confirm') {
+                    confirmModalText.innerHTML = data.confirmation_message;
+                    pendingNlpCommand = data.command;
+                    confirmModal.style.display = "block";
+                } else if (data.type === 'nlp_error') {
+                    alertModalText.textContent = data.message;
+                    alertModal.style.display = "block";
+                } else {
+                    currentPrices[data.symbol] = parseFloat(data.price);
+                    updateModalUnrealisedPnL(data.symbol, data.price);
+                    updatePriceDiffs();
+                }
+            } catch (e) {
+                console.error("Failed to parse JSON:", e);
+            }
+        };
+
+        websocket.onerror = (error) => {
+            console.error("WebSocket error:", error);
+        };
+
+        websocket.onclose = (event) => {
+            console.log("WebSocket connection closed:", event.code, event.reason);
+            if (event.code === 1008 || event.code === 1001) {
+                console.log("Not attempting to reconnect due to server-side close.");
+                if (event.code === 1008) {
+                    alert("세션이 만료되었거나 인증에 실패했습니다. 다시 로그인해주세요.");
+                    window.location.href = "/login";
+                }
+            } else {
+                console.log("Attempting to reconnect in 3 seconds...");
+                reconnectTimeout = setTimeout(connect, 3000);
+            }
+        };
+    }
+
+    connect();
+
     closeButton.onclick = () => {
         modal.style.display = "none";
     }
@@ -45,6 +122,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const cancelSelectedBtn = document.getElementById("cancel-selected-btn");
     const cancelAllBtn = document.getElementById("cancel-all-btn");
 
+    function checkSocketAndSend(payload) {
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            websocket.send(JSON.stringify(payload));
+            return true;
+        } else {
+            alertModalText.textContent = "WebSocket is not connected. Please wait.";
+            alertModal.style.display = "block";
+            console.error("WebSocket is not open. State:", websocket ? websocket.readyState : 'null');
+            return false;
+        }
+    }
+
     cancelSelectedBtn.addEventListener("click", () => {
         const selectedOrders = [];
         document.querySelectorAll(".order-checkbox:checked").forEach(checkbox => {
@@ -54,7 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         });
         if (selectedOrders.length > 0) {
-            websocket.send(JSON.stringify({ type: 'cancel_orders', orders: selectedOrders, exchange: activeExchange }));
+            checkSocketAndSend({ type: 'cancel_orders', orders: selectedOrders, exchange: activeExchange });
         } else {
             alertModalText.textContent = "취소할 주문을 선택하세요.";
             alertModal.style.display = "block";
@@ -71,12 +160,14 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     confirmYesBtn.addEventListener("click", () => {
+        let payload;
         if (pendingNlpCommand) {
-            websocket.send(JSON.stringify({ type: 'nlp_execute', command: pendingNlpCommand, exchange: activeExchange }));
+            payload = { type: 'nlp_execute', command: pendingNlpCommand, exchange: activeExchange };
             pendingNlpCommand = null;
         } else {
-            websocket.send(JSON.stringify({ type: 'cancel_all_orders', exchange: activeExchange }));
+            payload = { type: 'cancel_all_orders', exchange: activeExchange };
         }
+        checkSocketAndSend(payload);
         confirmModal.style.display = "none";
     });
 
@@ -101,14 +192,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const commandBar = document.getElementById('command-bar');
     const commandInput = document.getElementById('command-input');
-    let pendingNlpCommand = null;
 
     commandInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             const text = commandInput.value.trim();
             if (text) {
-                websocket.send(JSON.stringify({ type: 'nlp_command', text: text, exchange: activeExchange }));
-                commandInput.value = '';
+                if (checkSocketAndSend({ type: 'nlp_command', text: text, exchange: activeExchange })) {
+                    commandInput.value = '';
+                }
             }
         }
     });
@@ -120,64 +211,6 @@ document.addEventListener("DOMContentLoaded", () => {
             commandBar.style.bottom = `${keyboardHeight}px`;
         });
     }
-
-    websocket.onmessage = (event) => {
-        try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'exchanges_list') {
-                exchanges = data.data;
-                createExchangeTabs();
-                if (exchanges.length > 0) {
-                    setActiveExchange(exchanges[0]);
-                }
-            } else if (data.type === 'balance_update') {
-                updateCryptoCard(data);
-            } else if (data.type === 'remove_holding') {
-                const card = document.getElementById(data.symbol);
-                if (card) {
-                    card.remove();
-                    updateTotalValue();
-                }
-            } else if (data.type === 'orders_update') {
-                cachedOrders = data.data;
-                updateOrdersList();
-            } else if (data.type === 'log') {
-                cachedLogs.unshift(data);
-                updateLogsList();
-            } else if (data.type === 'reference_price_info') {
-                updateReferencePriceInfo(data.time);
-            } else if (data.type === 'reference_price_info') {
-                updateReferencePriceInfo(data.time);
-            } else if (data.type === 'nlp_trade_confirm') {
-                confirmModalText.innerHTML = data.confirmation_message;
-                pendingNlpCommand = data.command;
-                confirmModal.style.display = "block";
-            } else if (data.type === 'nlp_error') {
-                alertModalText.textContent = data.message;
-                alertModal.style.display = "block";
-            } else {
-                currentPrices[data.symbol] = parseFloat(data.price);
-                updateModalUnrealisedPnL(data.symbol, data.price);
-                updatePriceDiffs();
-            }
-        } catch (e) {
-            console.error("Failed to parse JSON:", e);
-        }
-    };
-
-    websocket.onopen = () => console.log("WebSocket connection established");
-    websocket.onerror = (error) => {
-        console.error("WebSocket error:", error);
-    };
-    websocket.onclose = (event) => {
-        console.log("WebSocket connection closed:", event.code, event.reason);
-        if (event.code === 1008) {
-            alert("세션이 만료되었거나 인증에 실패했습니다. 다시 로그인해주세요.");
-            window.location.href = "/login";
-        } else {
-            console.error("WebSocket closed with code:", event.code, "reason:", event.reason);
-        }
-    };
 
     function createExchangeTabs() {
         exchangeTabsContainer.innerHTML = '';
@@ -336,7 +369,6 @@ document.addEventListener("DOMContentLoaded", () => {
         filteredLogs.forEach(data => {
             const logData = data.message;
 
-            // Skip success logs from NLP trade execution
             if (logData.status === 'success') {
                 return;
             }
@@ -348,7 +380,6 @@ document.addEventListener("DOMContentLoaded", () => {
             let messageText = `[${timestamp}]`;
             messageText += ` ${logData.status}`;
 
-            // Add order_id early if available for better visibility
             if (logData.order_id) {
                 messageText += ` [${logData.order_id}]`;
             }
@@ -611,7 +642,6 @@ function openTab(evt, tabName) {
     evt.currentTarget.className += " active";
 }
 
-// Set default tab
 document.addEventListener("DOMContentLoaded", () => {
     document.querySelector(".tab-button").click();
 });
