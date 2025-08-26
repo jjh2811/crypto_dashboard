@@ -149,7 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
             } else if (data.type === 'reference_price_info') {
                 updateReferencePriceInfo(data.time);
             } else if (data.type === 'nlp_trade_confirm') {
-                confirmModalText.textContent = data.confirmation_message;
+                confirmModalText.innerHTML = data.confirmation_message;
                 pendingNlpCommand = data.command;
                 confirmModal.style.display = "block";
             } else if (data.type === 'nlp_error') {

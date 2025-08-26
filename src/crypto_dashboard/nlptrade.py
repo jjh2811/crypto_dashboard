@@ -541,27 +541,40 @@ class TradeCommandParser:
 
 
 def format_trade_command_for_confirmation(command: TradeCommand) -> str:
-    """TradeCommand를 사용자가 확인하기 쉬운 문자열로 변환합니다."""
+    """TradeCommand를 사용자가 확인하기 쉬운 HTML로 변환합니다."""
     intent_kr = "매수" if command.intent == "buy" else "매도"
     order_type_kr = "시장가" if command.order_type == "market" else "지정가"
-    
-    parts = [
-        "** 주문 확인 **",
-        f"  - 종류: {intent_kr}",
-        f"  - 코인: {command.symbol}",
-        f"  - 주문 유형: {order_type_kr}",
+
+    # 코인 심볼에서 기본 통화 제거 (BTC/USDT -> BTC)
+    coin_symbol = command.symbol.split('/')[0] if command.symbol and '/' in command.symbol else (command.symbol or 'Unknown')
+
+    html_parts = [
+        '<div class="trade-confirmation">',
+        '<h3>주문 확인</h3>',
+        '<div class="confirmation-details">',
+        f'<div class="detail-row"><span class="detail-label">종류:</span><span class="detail-value intent-{command.intent}">{intent_kr}</span></div>',
+        f'<div class="detail-row"><span class="detail-label">코인:</span><span class="detail-value">{coin_symbol}</span></div>',
+        f'<div class="detail-row"><span class="detail-label">주문 유형:</span><span class="detail-value">{order_type_kr}</span></div>',
     ]
 
     if command.amount:
-        parts.append(f"  - 수량: {command.amount}")
-    
+        html_parts.append(f'<div class="detail-row"><span class="detail-label">수량:</span><span class="detail-value">{command.amount}</span></div>')
+
     if command.price:
-        parts.append(f"  - 지정가: {command.price}")
+        html_parts.append(f'<div class="detail-row"><span class="detail-label">지정가:</span><span class="detail-value">{command.price}</span></div>')
 
     if command.total_cost:
-        parts.append(f"  - 총 주문액: {command.total_cost} (예상)")
-        
-    return "\n".join(parts)
+        html_parts.append(f'<div class="detail-row"><span class="detail-label">총 주문액:</span><span class="detail-value">{command.total_cost}</span></div>')
+
+    html_parts.extend([
+        '</div>',
+        '<div class="confirmation-notice">',
+        '<p>이 주문을 정말로 실행하시겠습니까?</p>',
+        '</div>',
+        '</div>'
+    ])
+
+    return ''.join(html_parts)
 
 
 class TradeExecutor:

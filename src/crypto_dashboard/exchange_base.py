@@ -181,9 +181,13 @@ class ExchangeBase(ABC):
 
     async def cancel_order(self, order_id: str, symbol: str) -> None:
         try:
+            # Send cancelling log before the actual request
+            await self.app['broadcast_log']({'status': 'Cancelling', 'symbol': symbol, 'order_id': order_id}, self.name, self.logger)
+
+            # Send the actual cancel request
             await self.exchange.cancel_order(order_id, symbol)
             self.logger.info(f"Successfully sent cancel request for order {order_id}")
-            await self.app['broadcast_log']({'status': 'Cancelling', 'symbol': symbol, 'order_id': order_id}, self.name, self.logger)
+
         except Exception as e:
             self.logger.error(f"Failed to cancel order {order_id}: {e}")
             await self.app['broadcast_log']({'status': 'Cancel Failed', 'symbol': symbol, 'order_id': order_id, 'reason': str(e)}, self.name, self.logger)

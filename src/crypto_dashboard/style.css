@@ -234,16 +234,84 @@ body {
     background-color: rgba(0,0,0,0.4);
 }
 
-.modal-content {
-    background-color: #fefefe;
-    margin: 15% auto;
+/* Trade Confirmation Modal Styles */
+.trade-confirmation {
     padding: 20px;
-    border: 1px solid #888;
-    width: 80%;
-    max-width: 400px;
+}
+
+.trade-confirmation h3 {
+    color: #1a73e8;
+    margin-bottom: 20px;
+    font-size: 1.4em;
+    text-align: center;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 10px;
+}
+
+.confirmation-details {
+    margin: 20px 0;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-label {
+    font-weight: bold;
+    color: #5f6368;
+    flex: 1;
+}
+
+.detail-value {
+    font-weight: 500;
+    color: #333;
+    flex: 2;
+    text-align: right;
+}
+
+.detail-value.intent-buy {
+    color: #28a745;
+}
+
+.detail-value.intent-sell {
+    color: #dc3545;
+}
+
+.confirmation-notice {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
     border-radius: 8px;
     text-align: center;
-    position: relative;
+}
+
+.confirmation-notice p {
+    margin: 0;
+    color: #6c757d;
+    font-size: 0.9em;
+}
+
+.modal-content {
+    background-color: #fefefe;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 90%;
+    max-width: 450px;
+    border-radius: 12px;
+    text-align: center;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
 }
 
 #modal-crypto-balance-details .info-row {
