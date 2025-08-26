@@ -4,12 +4,13 @@ from decimal import Decimal
 import json
 import logging
 import os
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, List, Optional, cast
 
 from aiohttp import web
 from websockets.legacy.client import WebSocketClientProtocol
 
 from .exchange_utils import calculate_average_buy_price
+from .nlptrade import EntityExtractor, TradeCommandParser, TradeExecutor
 from .protocols import Balances, ExchangeProtocol
 
 
@@ -20,9 +21,9 @@ class ExchangeBase(ABC):
         self.app = app
 
         with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
-            config = json.load(f)
+            self.config = json.load(f)
 
-        exchange_config = config['exchanges'][self.name.lower()]
+        exchange_config = self.config['exchanges'][self.name.lower()]
         self.quote_currency = exchange_config.get('quote_currency')
 
         self._exchange = self._create_exchange_instance(api_key, secret_key, exchange_config)
@@ -35,6 +36,11 @@ class ExchangeBase(ABC):
         self.user_data_subscribed_event = asyncio.Event()
         self.tracked_assets = set()
         self._ws_id_counter = 1
+
+        # NLP-related instances
+        self.coins: List[str] = []
+        self.parser: Optional[TradeCommandParser] = None
+        self.executor: Optional[TradeExecutor] = None
 
     @abstractmethod
     def _create_exchange_instance(self, api_key: str, secret_key: str, exchange_config: Dict[str, Any]) -> ExchangeProtocol:
@@ -84,8 +90,35 @@ class ExchangeBase(ABC):
 
         return message
 
+    async def _initialize_nlp_trader(self) -> None:
+        """거래소의 코인 목록을 로드하고 NLP 거래 관련 객체들을 초기화합니다."""
+        try:
+            self.logger.info(f"Initializing NLP trader for {self.name}...")
+            await self.exchange.load_markets(reload=True)
+            
+            # `base`가 있는 활성 마켓의 `base` 심볼만 추출합니다.
+            unique_coins = {market['base'] for market in self.exchange.markets.values() if market.get('active') and market.get('base')}
+            self.coins = sorted(list(unique_coins))
+            self.logger.info(f"Loaded {len(self.coins)} unique coins for {self.name}.")
+
+            # nlptrade 설정 로드
+            nlptrade_config = self.config.get('nlptrade', {})
+            # 각 거래소의 quote_currency를 nlptrade 설정에 주입
+            nlptrade_config['quote_currency'] = self.quote_currency
+
+            extractor = EntityExtractor(self.coins, nlptrade_config, self.logger)
+            self.executor = TradeExecutor(self.exchange, self.quote_currency, self.logger)
+            self.parser = TradeCommandParser(extractor, self.executor, self, self.logger)
+            self.logger.info(f"NLP trader initialized successfully for {self.name}.")
+
+        except Exception as e:
+            self.logger.error(f"Failed to initialize NLP trader for {self.name}: {e}", exc_info=True)
+
     async def get_initial_data(self) -> None:
         try:
+            # NLP 트레이더를 먼저 초기화하여 마켓 정보를 로드합니다.
+            await self._initialize_nlp_trader()
+
             balance, open_orders = await asyncio.gather(
                 self.exchange.fetch_balance(),
                 self.exchange.fetch_open_orders()
@@ -116,7 +149,7 @@ class ExchangeBase(ABC):
             raise
 
         holding_assets = set(self.balances_cache.keys())
-        order_assets = {o['symbol'].replace(self.quote_currency, '').replace('/', '') for o in self.orders_cache.values()}
+        order_assets = {o['symbol'].replace(self.quote_currency, '').replace('/', '') for o in self.orders_cache.values() if o.get('symbol')}
         self.tracked_assets = holding_assets | order_assets
 
     async def _process_initial_balances(self, balance: Balances, total_balances: Dict[str, float]):

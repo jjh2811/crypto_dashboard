@@ -1,39 +1,30 @@
-from typing import Any, Dict, List, Protocol, TypedDict
+from typing import Any, Dict, List, Optional, Protocol, TypedDict
 
-
-class Balances(TypedDict):
-    info: Dict[str, Any]
-    free: Dict[str, float]
-    used: Dict[str, float]
-    total: Dict[str, float]
-
-
-class Order(TypedDict):
-    id: str
-    symbol: str
-    side: str
-    price: float
-    amount: float
-    value: float
-    timestamp: int
-    status: str
+from ccxt.base.types import Balances, Int, Order, OrderBook, Ticker
 
 
 class ExchangeProtocol(Protocol):
+    """A comprehensive protocol for exchange methods used in the application."""
+    # --- Properties ---
     apiKey: str
     secret: str
+    name: str
+    id: str
+    timeout: Optional[int]
+    markets: dict
 
-    async def fetch_balance(self, params: Dict[str, Any] = {}) -> Balances:
-        ...
+    # --- Methods ---
+    def set_sandbox_mode(self, enabled: bool) -> None: ...
+    def amount_to_precision(self, symbol: str, amount: float) -> str: ...
+    def price_to_precision(self, symbol: str, price: float) -> str: ...
 
-    async def fetch_open_orders(self, symbol: str | None = None, since: int | None = None, limit: int | None = None, params: Dict[str, Any] = {}) -> List[Order]:
-        ...
-
-    async def cancel_order(self, order_id: str, symbol: str | None = None, params: Dict[str, Any] = {}) -> Any:
-        ...
-
-    async def fetch_closed_orders(self, symbol: str | None = None, since: int | None = None, limit: int | None = None, params: Dict[str, Any] = {}) -> List[Order]:
-        ...
-
-    async def close(self) -> None:
-        ...
+    # --- Async Methods ---
+    async def load_markets(self, reload: bool = False) -> dict: ...
+    async def fetch_balance(self, params: Dict[str, Any] = {}) -> Balances: ...
+    async def fetch_ticker(self, symbol: str, params: Dict[str, Any] = {}) -> Ticker: ...
+    async def fetch_order_book(self, symbol: str, limit: Int = None, params: Dict[str, Any] = {}) -> OrderBook: ...
+    async def fetch_open_orders(self, symbol: Optional[str] = None, since: Optional[int] = None, limit: Optional[int] = None, params: Dict[str, Any] = {}) -> List[Order]: ...
+    async def fetch_my_trades(self, symbol: Optional[str] = None, since: Optional[int] = None, limit: Optional[int] = None, params: Dict[str, Any] = {}) -> List[Dict[str, Any]]: ...
+    async def create_order(self, symbol: str, type: str, side: str, amount: float, price: Optional[float] = None, params: Dict[str, Any] = {}) -> Order: ...
+    async def cancel_order(self, id: str, symbol: Optional[str] = None, params: Dict[str, Any] = {}) -> Any: ...
+    async def close(self) -> None: ...

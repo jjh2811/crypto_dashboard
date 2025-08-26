@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import asdict
 from datetime import datetime, timezone
 import importlib
 import json
@@ -8,6 +9,7 @@ import secrets
 
 from aiohttp import web
 
+from .nlptrade import TradeCommand, format_trade_command_for_confirmation
 
 SECRET_TOKEN = secrets.token_hex(32)
 
@@ -190,26 +192,62 @@ async def handle_websocket(request):
                     exchanges = app.get('exchanges', {})
                     exchange_name = data.get('exchange')
 
-                    if not exchanges or not exchange_name or exchange_name not in exchanges:
-                        logger.error(f"Invalid exchange specified or no exchanges initialized. Cannot process order cancellation. Exchange: {exchange_name}")
-                        continue
+                    if not exchange_name or exchange_name not in exchanges:
+                        logger.error(f"Invalid exchange specified or no exchanges initialized. Exchange: {exchange_name}")
+                        if msg_type in ('cancel_orders', 'cancel_all_orders', 'nlp_command', 'nlp_execute'):
+                            continue
 
-                    exchange = exchanges[exchange_name]
+                    exchange = exchanges.get(exchange_name)
 
                     if msg_type == 'cancel_orders':
                         orders_to_cancel = data.get('orders', [])
                         logger.info(f"Received request to cancel {len(orders_to_cancel)} orders on {exchange.name}.")
                         for order in orders_to_cancel:
                             await exchange.cancel_order(order['id'], order['symbol'])
-                        # The broadcast will be triggered by the user data stream update
 
                     elif msg_type == 'cancel_all_orders':
                         logger.info(f"Received request to cancel all orders on {exchange.name}.")
                         await exchange.cancel_all_orders()
-                        # The broadcast will be triggered by the user data stream update
+
+                    elif msg_type == 'nlp_command':
+                        text = data.get('text', '')
+                        if not exchange or not exchange.parser:
+                            logger.error(f"NLP parser not available for exchange: {exchange_name}")
+                            await ws.send_json({'type': 'nlp_error', 'message': f'{exchange_name}의 자연어 처리기가 준비되지 않았습니다.'})
+                            continue
+                        
+                        command = await exchange.parser.parse(text)
+                        if command:
+                            confirmation_message = format_trade_command_for_confirmation(command)
+                            await ws.send_json({
+                                'type': 'nlp_trade_confirm',
+                                'confirmation_message': confirmation_message,
+                                'command': asdict(command)
+                            })
+                        else:
+                            await ws.send_json({'type': 'nlp_error', 'message': '명령을 해석하지 못했습니다.'})
+
+                    elif msg_type == 'nlp_execute':
+                        command_data = data.get('command')
+                        if not exchange or not exchange.executor:
+                            logger.error(f"NLP executor not available for exchange: {exchange_name}")
+                            await ws.send_json({'type': 'nlp_error', 'message': f'{exchange_name}의 거래 실행기가 준비되지 않았습니다.'})
+                            continue
+
+                        if command_data:
+                            trade_command = TradeCommand(**command_data)
+                            logger.info(f"Executing NLP command: {trade_command}")
+                            result = await exchange.executor.execute(trade_command)
+                            await broadcast_log(result, exchange.name)
+                        else:
+                            logger.error("No command data received for nlp_execute")
+                            await ws.send_json({'type': 'nlp_error', 'message': '거래 실행 정보가 없습니다.'})
 
                 except json.JSONDecodeError:
                     logger.warning(f"Received non-JSON message: {msg.data}")
+                except Exception as e:
+                    logger.error(f"Error processing websocket message: {e}", exc_info=True)
+
             elif msg.type == web.WSMsgType.ERROR:
                 logger.error(f'ws connection closed with exception {ws.exception()}')
     except asyncio.CancelledError:
