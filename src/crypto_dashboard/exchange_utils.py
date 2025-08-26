@@ -2,6 +2,7 @@ import logging
 from decimal import Decimal
 from typing import Optional, Tuple
 
+from ccxt.base.types import Order
 from .protocols import ExchangeProtocol
 
 
@@ -21,7 +22,12 @@ async def calculate_average_buy_price(
         if not trade_history:
             return None, None
 
-        sorted_trades = sorted(trade_history, key=lambda x: x.get('timestamp', 0))
+        def get_timestamp(trade: Order) -> int:
+            """Helper to get a timestamp from a trade, defaulting to 0 if missing or invalid."""
+            ts = trade.get('timestamp', 0)
+            return int(ts) if isinstance(ts, (int, float)) else 0
+
+        sorted_trades = sorted(trade_history, key=get_timestamp)
 
         running_amount = current_amount
         start_index = -1
