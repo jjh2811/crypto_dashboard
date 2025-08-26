@@ -71,11 +71,17 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     confirmYesBtn.addEventListener("click", () => {
-        websocket.send(JSON.stringify({ type: 'cancel_all_orders', exchange: activeExchange }));
+        if (pendingNlpCommand) {
+            websocket.send(JSON.stringify({ type: 'nlp_execute', command: pendingNlpCommand, exchange: activeExchange }));
+            pendingNlpCommand = null;
+        } else {
+            websocket.send(JSON.stringify({ type: 'cancel_all_orders', exchange: activeExchange }));
+        }
         confirmModal.style.display = "none";
     });
 
     confirmNoBtn.addEventListener("click", () => {
+        pendingNlpCommand = null;
         confirmModal.style.display = "none";
     });
 
@@ -94,6 +100,18 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const commandBar = document.getElementById('command-bar');
+    const commandInput = document.getElementById('command-input');
+    let pendingNlpCommand = null;
+
+    commandInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            const text = commandInput.value.trim();
+            if (text) {
+                websocket.send(JSON.stringify({ type: 'nlp_command', text: text, exchange: activeExchange }));
+                commandInput.value = '';
+            }
+        }
+    });
 
     if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', () => {
@@ -128,6 +146,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 updateLogsList();
             } else if (data.type === 'reference_price_info') {
                 updateReferencePriceInfo(data.time);
+            } else if (data.type === 'reference_price_info') {
+                updateReferencePriceInfo(data.time);
+            } else if (data.type === 'nlp_trade_confirm') {
+                confirmModalText.textContent = data.confirmation_message;
+                pendingNlpCommand = data.command;
+                confirmModal.style.display = "block";
+            } else if (data.type === 'nlp_error') {
+                alertModalText.textContent = data.message;
+                alertModal.style.display = "block";
             } else {
                 currentPrices[data.symbol] = parseFloat(data.price);
                 updateModalUnrealisedPnL(data.symbol, data.price);
