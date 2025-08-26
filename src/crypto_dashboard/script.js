@@ -335,12 +335,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
         filteredLogs.forEach(data => {
             const logData = data.message;
+
+            // Skip success logs from NLP trade execution
+            if (logData.status === 'success') {
+                return;
+            }
+
             const logElement = document.createElement('p');
             const now = new Date(data.timestamp);
             const timestamp = `${now.getMonth() + 1}/${now.getDate()} ${now.toLocaleTimeString()}`;
-            
+
             let messageText = `[${timestamp}]`;
             messageText += ` ${logData.status}`;
+
+            // Add order_id early if available for better visibility
+            if (logData.order_id) {
+                messageText += ` [${logData.order_id}]`;
+            }
 
             if (logData.symbol) {
                 messageText += ` - ${logData.symbol}`;
@@ -356,9 +367,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             if (logData.amount) {
                 messageText += ` | Amount: ${parseFloat(logData.amount.toPrecision(8))}`;
-            }
-            if (logData.order_id) {
-                messageText += ` | Order ID: ${logData.order_id}`;
             }
             if (logData.reason) {
                 messageText += ` | Reason: ${logData.reason}`;

@@ -183,20 +183,20 @@ class ExchangeBase(ABC):
         try:
             await self.exchange.cancel_order(order_id, symbol)
             self.logger.info(f"Successfully sent cancel request for order {order_id}")
-            await self.app['broadcast_log']({'status': 'Cancelling', 'symbol': symbol, 'order_id': order_id}, self.name)
+            await self.app['broadcast_log']({'status': 'Cancelling', 'symbol': symbol, 'order_id': order_id}, self.name, self.logger)
         except Exception as e:
             self.logger.error(f"Failed to cancel order {order_id}: {e}")
-            await self.app['broadcast_log']({'status': 'Cancel Failed', 'symbol': symbol, 'order_id': order_id, 'reason': str(e)}, self.name)
+            await self.app['broadcast_log']({'status': 'Cancel Failed', 'symbol': symbol, 'order_id': order_id, 'reason': str(e)}, self.name, self.logger)
 
     async def cancel_all_orders(self) -> None:
         self.logger.info("Received request to cancel all orders.")
         all_orders = list(self.orders_cache.values())
         if not all_orders:
             self.logger.info("No open orders to cancel.")
-            await self.app['broadcast_log']({'status': 'Info', 'message': 'No open orders to cancel.'}, self.name)
+            await self.app['broadcast_log']({'status': 'Info', 'message': 'No open orders to cancel.'}, self.name, self.logger)
             return
 
-        await self.app['broadcast_log']({'status': 'Info', 'message': f'Cancelling all {len(all_orders)} orders.'}, self.name)
+        await self.app['broadcast_log']({'status': 'Info', 'message': f'Cancelling all {len(all_orders)} orders.'}, self.name, self.logger)
 
         for order in all_orders:
             order_id = order.get('id')
@@ -208,7 +208,7 @@ class ExchangeBase(ABC):
                 self.logger.info(f"Successfully sent cancel request for order {order_id}")
             except Exception as e:
                 self.logger.error(f"Failed to cancel order {order_id}: {e}")
-                await self.app['broadcast_log']({'status': 'Cancel Failed', 'symbol': symbol, 'order_id': order_id, 'reason': str(e)}, self.name)
+                await self.app['broadcast_log']({'status': 'Cancel Failed', 'symbol': symbol, 'order_id': order_id, 'reason': str(e)}, self.name, self.logger)
 
         self.orders_cache.clear()
 

@@ -50,7 +50,7 @@ async def broadcast_orders_update(exchange):
     update_message = {'type': 'orders_update', 'data': orders_with_exchange}
     await broadcast_message(update_message)
 
-async def broadcast_log(message, exchange_name=None):
+async def broadcast_log(message, exchange_name=None, exchange_logger=None):
     """모든 클라이언트에게 로그 메시지를 전송합니다."""
     log_message = {
         'type': 'log',
@@ -59,7 +59,11 @@ async def broadcast_log(message, exchange_name=None):
         'exchange': exchange_name
     }
     log_cache.append(log_message)
-    logger.info(f"LOG: {message}")
+
+    # Use exchange-specific logger if available, otherwise use root logger
+    log_logger = exchange_logger if exchange_logger else logger
+    log_logger.info(f"LOG: {message}")
+
     await broadcast_message(log_message)
 
 async def login(request):
@@ -238,7 +242,7 @@ async def handle_websocket(request):
                             trade_command = TradeCommand(**command_data)
                             logger.info(f"Executing NLP command: {trade_command}")
                             result = await exchange.executor.execute(trade_command)
-                            await broadcast_log(result, exchange.name)
+                            await broadcast_log(result, exchange.name, exchange.logger)
                         else:
                             logger.error("No command data received for nlp_execute")
                             await ws.send_json({'type': 'nlp_error', 'message': '거래 실행 정보가 없습니다.'})

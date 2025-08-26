@@ -247,6 +247,7 @@ class BinanceExchange(ExchangeBase):
                                 'status': status,
                                 'symbol': symbol,
                                 'side': side,
+                                'order_id': order_id,
                             }
 
                             if status == 'NEW':
@@ -264,7 +265,7 @@ class BinanceExchange(ExchangeBase):
                                 }
                                 self.logger.info(f"New order: {order_id} - {symbol} {status}")
                                 log_payload.update({'price': float(price), 'amount': float(original_amount)})
-                                await self.app['broadcast_log'](log_payload, self.name)
+                                await self.app['broadcast_log'](log_payload, self.name, self.logger)
 
                             elif status == 'PARTIALLY_FILLED':
                                 if order_id in self.orders_cache:
@@ -287,7 +288,7 @@ class BinanceExchange(ExchangeBase):
                                     self.logger.info(f"New (partially filled) order: {order_id} - {symbol} {status}")
 
                                 log_payload.update({'price': float(price), 'amount': float(last_executed_quantity)})
-                                await self.app['broadcast_log'](log_payload, self.name)
+                                await self.app['broadcast_log'](log_payload, self.name, self.logger)
 
                             elif status in ['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED']:
                                 if order_id in self.orders_cache:
@@ -297,7 +298,7 @@ class BinanceExchange(ExchangeBase):
                                 if status == 'FILLED':
                                     log_payload.update({'price': float(data.get('L', '0')), 'amount': float(last_executed_quantity)})
 
-                                await self.app['broadcast_log'](log_payload, self.name)
+                                await self.app['broadcast_log'](log_payload, self.name, self.logger)
 
                             await self.app['broadcast_orders_update'](self)
 

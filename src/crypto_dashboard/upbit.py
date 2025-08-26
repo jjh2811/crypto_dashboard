@@ -195,7 +195,7 @@ class UpbitExchange(ExchangeBase):
                                 amount = Decimal(str(data.get('v', '0')))
                                 filled = Decimal(str(data.get('ev', '0')))
 
-                                log_payload = {'status': status, 'symbol': symbol, 'side': side}
+                                log_payload = {'status': status, 'symbol': symbol, 'side': side, 'order_id': order_id}
 
                                 if status in ['wait', 'watch']: # NEW
                                     self.orders_cache[order_id] = {
@@ -205,7 +205,7 @@ class UpbitExchange(ExchangeBase):
                                         'timestamp': data.get('otms'), 'status': status
                                     }
                                     log_payload.update({'price': float(price), 'amount': float(amount)})
-                                    await self.app['broadcast_log'](log_payload, self.name)
+                                    await self.app['broadcast_log'](log_payload, self.name, self.logger)
 
                                 elif status == 'trade': # PARTIALLY_FILLED or FILLED by trade
                                     if order_id in self.orders_cache:
@@ -222,7 +222,7 @@ class UpbitExchange(ExchangeBase):
                                     trade_volume = Decimal(str(data.get('v', '0')))
                                     trade_price = Decimal(str(data.get('p', '0')))
                                     log_payload.update({'price': float(trade_price), 'amount': float(trade_volume)})
-                                    await self.app['broadcast_log'](log_payload, self.name)
+                                    await self.app['broadcast_log'](log_payload, self.name, self.logger)
 
                                     if side == 'buy' and asset in self.balances_cache and trade_volume > 0:
                                         old_total_amount = self.balances_cache[asset].get('total_amount', Decimal('0')) - trade_volume
@@ -244,7 +244,7 @@ class UpbitExchange(ExchangeBase):
                                     if status == 'done':
                                         log_payload.update({'price': float(price), 'amount': float(amount)})
 
-                                    await self.app['broadcast_log'](log_payload, self.name)
+                                    await self.app['broadcast_log'](log_payload, self.name, self.logger)
 
                                 await self.app['broadcast_orders_update'](self)
                                 await self.update_subscriptions_if_needed()
