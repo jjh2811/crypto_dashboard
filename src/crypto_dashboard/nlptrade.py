@@ -422,6 +422,51 @@ class TradeCommandParser:
     async def parse(self, text: str) -> Optional[TradeCommand]:
         """주어진 텍스트를 파싱하여 TradeCommand 객체로 변환합니다."""
         entities = self.extractor.extract_entities(text)
+        # 코인을 찾지 못한 경우 마켓 정보를 갱신하고 다시 시도
+        should_refresh_markets = False
+        if entities.get("intent") and entities.get("coin") is None:
+            order_type = entities.get("order_type", "market")
+
+            if order_type == "limit":  # 지정가 주문
+                # 수량 조건: amount 또는 relative_amount 또는 total_cost
+                amount_condition = (entities.get("amount") is not None or
+                                  entities.get("relative_amount") is not None or
+                                  entities.get("total_cost") is not None)
+                # 가격 조건: price 또는 relative_price 또는 current_price_order
+                price_condition = (entities.get("price") is not None or
+                                 entities.get("relative_price") is not None or
+                                 entities.get("current_price_order") is True)
+
+                if amount_condition and price_condition:
+                    should_refresh_markets = True
+
+            elif order_type == "market":  # 시장가 주문
+                # 수량 조건: amount 또는 relative_amount 또는 total_cost
+                if (entities.get("amount") is not None or
+                    entities.get("relative_amount") is not None or
+                    entities.get("total_cost") is not None):
+                    should_refresh_markets = True
+
+        if should_refresh_markets:
+            self.logger.info("코인을 찾지 못했지만 다른 주문 정보는 있습니다. 마켓 정보를 갱신하고 다시 시도합니다.")
+            try:
+                # 마켓 정보 갱신
+                await self.exchange_base.exchange.load_markets(reload=True)
+
+                # 코인 목록 업데이트
+                unique_coins = {market['base'] for market in self.exchange_base.exchange.markets.values() if market.get('active') and market.get('base')}
+                self.extractor.coins = sorted(list(unique_coins))
+
+                # 최대 코인 길이 재계산
+                self.extractor._update_max_coin_len()
+
+                self.logger.info(f"마켓 정보 갱신 완료. 새로운 코인 목록 크기: {len(self.extractor.coins)}")
+
+                # 엔티티 재추출
+                entities = self.extractor.extract_entities(text)
+
+            except Exception as e:
+                self.logger.error(f"마켓 정보 갱신 실패: {e}")
 
         if not entities.get("intent") or not entities.get("coin"):
             self.logger.warning(f"Parse failed for text: '{text}'. Missing intent or coin.")
