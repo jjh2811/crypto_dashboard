@@ -221,5 +221,26 @@ class ExchangeBase(ABC):
 
         self.orders_cache.clear()
 
+        # Broadcast updated orders list to all clients immediately
+        await self.app['broadcast_orders_update'](self)
+
+    async def _fetch_and_update_price(self, symbol: str, asset: str) -> None:
+        """Fetch current price and update balances_cache for accurate diff calculation"""
+        try:
+            ticker = await self.exchange.fetch_ticker(symbol)
+            current_price = Decimal(str(ticker.get('last', '0')))
+            if current_price > 0:
+                if asset in self.balances_cache:
+                    self.balances_cache[asset]['price'] = current_price
+                    update_message = self.create_balance_update_message(asset, self.balances_cache[asset])
+                    await self.app['broadcast_message'](update_message)
+                else:
+                    # If asset not in balances_cache, still broadcast price update
+                    update_message = {'symbol': asset, 'price': float(current_price)}
+                    await self.app['broadcast_message'](update_message)
+                self.logger.info(f"Fetched current price for {asset}: {current_price}")
+        except Exception as e:
+            self.logger.warning(f"Failed to fetch current price for {symbol}: {e}")
+
     async def close(self) -> None:
         await self.exchange.close()

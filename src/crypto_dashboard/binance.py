@@ -267,6 +267,9 @@ class BinanceExchange(ExchangeBase):
                                 log_payload.update({'price': float(price), 'amount': float(original_amount)})
                                 await self.app['broadcast_log'](log_payload, self.name, self.logger)
 
+                                # Fetch current price immediately for accurate diff calculation
+                                await self._fetch_and_update_price(symbol, asset)
+
                             elif status == 'PARTIALLY_FILLED':
                                 if order_id in self.orders_cache:
                                     self.orders_cache[order_id]['filled'] = float(cumulative_filled_quantity)

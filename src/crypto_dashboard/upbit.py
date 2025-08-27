@@ -207,6 +207,9 @@ class UpbitExchange(ExchangeBase):
                                     log_payload.update({'price': float(price), 'amount': float(amount)})
                                     await self.app['broadcast_log'](log_payload, self.name, self.logger)
 
+                                    # Fetch current price immediately for accurate diff calculation
+                                    await self._fetch_and_update_price(symbol, asset)
+
                                 elif status == 'trade': # PARTIALLY_FILLED or FILLED by trade
                                     if order_id in self.orders_cache:
                                         self.orders_cache[order_id]['filled'] = float(filled)
