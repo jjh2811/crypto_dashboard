@@ -185,8 +185,13 @@ class ExchangeBase(ABC):
             await self.app['broadcast_log']({'status': 'Cancelling', 'symbol': symbol, 'order_id': order_id}, self.name, self.logger)
 
             # Send the actual cancel request
-            await self.exchange.cancel_order(order_id, symbol)
+            cancelled_order = await self.exchange.cancel_order(order_id, symbol)
             self.logger.info(f"Successfully sent cancel request for order {order_id}")
+
+            # Remove the order from cache immediately for UI update
+            if order_id in self.orders_cache:
+                del self.orders_cache[order_id]
+                self.logger.info(f"Removed order {order_id} from cache after successful cancel request")
 
         except Exception as e:
             self.logger.error(f"Failed to cancel order {order_id}: {e}")

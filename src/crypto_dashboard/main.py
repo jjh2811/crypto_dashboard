@@ -208,6 +208,7 @@ async def handle_websocket(request):
                         logger.info(f"Received request to cancel {len(orders_to_cancel)} orders on {exchange.name}.")
                         for order in orders_to_cancel:
                             await exchange.cancel_order(order['id'], order['symbol'])
+                        await broadcast_orders_update(exchange)
 
                     elif msg_type == 'cancel_all_orders':
                         logger.info(f"Received request to cancel all orders on {exchange.name}.")
