@@ -199,6 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (text) {
                 if (checkSocketAndSend({ type: 'nlp_command', text: text, exchange: activeExchange })) {
                     commandInput.value = '';
+                    commandInput.blur();
                 }
             }
         }
