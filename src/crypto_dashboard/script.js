@@ -251,7 +251,7 @@ document.addEventListener("DOMContentLoaded", () => {
             card.className = "crypto-card";
             cryptoContainer.appendChild(card);
         }
-        
+
         Object.keys(data).forEach(key => {
             card.dataset[key] = data[key];
         });
@@ -346,7 +346,7 @@ document.addEventListener("DOMContentLoaded", () => {
             orderCard.dataset.exchange = order.exchange;
             const baseSymbol = order.symbol.replace('USDT', '').replace('/', '');
             const currentPrice = currentPrices[baseSymbol];
-            
+
             orderCard.innerHTML = createOrderCardHTML(order, currentPrice);
             ordersContainer.appendChild(orderCard);
         });

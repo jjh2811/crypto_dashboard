@@ -30,6 +30,7 @@ class ExchangeBase(ABC):
 
         self.balances_cache: Dict[str, Dict[str, Any]] = {}
         self.orders_cache: Dict[str, Dict[str, Any]] = {}
+        self.order_prices: Dict[str, Decimal] = {}  # 주문 코인들의 가격 캐시
         self.userdata_ws: Optional[WebSocketClientProtocol] = None
         self.price_ws: Optional[WebSocketClientProtocol] = None
         self.price_ws_connected_event = asyncio.Event()
@@ -152,6 +153,13 @@ class ExchangeBase(ABC):
         order_assets = {o['symbol'].replace(self.quote_currency, '').replace('/', '') for o in self.orders_cache.values() if o.get('symbol')}
         self.tracked_assets = holding_assets | order_assets
 
+        # 주문이 있는 코인들의 가격도 초기화 (동기적으로 실행)
+        try:
+            await self._initialize_price_for_tracked_assets()
+            self.logger.info(f"Initialized prices for {len(self.tracked_assets)} tracked assets")
+        except Exception as e:
+            self.logger.warning(f"Failed to initialize prices for tracked assets: {e}")
+
     async def _process_initial_balances(self, balance: Balances, total_balances: Dict[str, float]):
         for asset, total_amount in total_balances.items():
             avg_buy_price, realised_pnl = await calculate_average_buy_price(self.exchange, asset, Decimal(str(total_amount)), self.quote_currency, self.logger)
@@ -223,6 +231,42 @@ class ExchangeBase(ABC):
 
         # Broadcast updated orders list to all clients immediately
         await self.app['broadcast_orders_update'](self)
+
+    async def _update_asset_price(self, asset: str, price: Decimal) -> None:
+        """Update asset price in cache and broadcast update"""
+        if asset in self.balances_cache:
+            self.balances_cache[asset]['price'] = price
+            update_message = self.create_balance_update_message(asset, self.balances_cache[asset])
+            await self.app['broadcast_message'](update_message)
+        else:
+            # 주문 코인의 가격은 별도의 캐시에 저장하고 price_update 메시지만 전송
+            self.order_prices[asset] = price
+            update_message = {'symbol': asset, 'price': float(price)}
+            await self.app['broadcast_message'](update_message)
+
+    async def _initialize_price_for_tracked_assets(self) -> None:
+        """Initialize prices for all tracked assets using batch fetch"""
+        assets_to_fetch = [a for a in self.tracked_assets if a != self.quote_currency]
+        if not assets_to_fetch:
+            return
+
+        symbols = [f"{asset}/{self.quote_currency}" for asset in assets_to_fetch]
+
+        try:
+            # Try batch fetch first
+            tickers = await self.exchange.fetch_tickers(symbols)
+            for symbol, ticker in tickers.items():
+                asset = symbol.split('/')[0]
+                await self._update_asset_price(asset, Decimal(str(ticker.get('last', '0'))))
+        except Exception:
+            # Fallback to individual fetches
+            for asset in assets_to_fetch:
+                try:
+                    symbol = f"{asset}/{self.quote_currency}"
+                    ticker = await self.exchange.fetch_ticker(symbol)
+                    await self._update_asset_price(asset, Decimal(str(ticker.get('last', '0'))))
+                except Exception as e:
+                    self.logger.warning(f"Failed to fetch price for {asset}: {e}")
 
     async def _fetch_and_update_price(self, symbol: str, asset: str) -> None:
         """Fetch current price and update balances_cache for accurate diff calculation"""

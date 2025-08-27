@@ -250,6 +250,7 @@ async def handle_websocket(request):
                             logger.error("No command data received for nlp_execute")
                             await ws.send_json({'type': 'nlp_error', 'message': '거래 실행 정보가 없습니다.'})
 
+
                 except json.JSONDecodeError:
                     logger.warning(f"Received non-JSON message: {msg.data}")
                 except Exception as e:
