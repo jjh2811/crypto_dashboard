@@ -220,14 +220,16 @@ async def handle_websocket(request):
                             await ws.send_json({'type': 'nlp_error', 'message': f'{exchange_name}의 자연어 처리기가 준비되지 않았습니다.'})
                             continue
                         
-                        command = await exchange.parser.parse(text)
-                        if command:
-                            confirmation_message = format_trade_command_for_confirmation(command)
+                        result = await exchange.parser.parse(text)
+                        if isinstance(result, TradeCommand):
+                            confirmation_message = format_trade_command_for_confirmation(result)
                             await ws.send_json({
                                 'type': 'nlp_trade_confirm',
                                 'confirmation_message': confirmation_message,
-                                'command': asdict(command)
+                                'command': asdict(result)
                             })
+                        elif isinstance(result, str):
+                            await ws.send_json({'type': 'nlp_error', 'message': result})
                         else:
                             await ws.send_json({'type': 'nlp_error', 'message': '명령을 해석하지 못했습니다.'})
 

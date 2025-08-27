@@ -402,24 +402,26 @@ class TradeCommandParser:
         self.exchange_base = exchange_base
         self.logger = logger
 
-    def _adjust_precision(self, value: Optional[Decimal], symbol: str, value_type: str) -> Optional[Decimal]:
-        """거래소 정밀도에 맞게 값을 조정하고 Decimal로 반환합니다."""
+    def _adjust_precision(self, value: Optional[Decimal], symbol: str, value_type: str) -> Tuple[Optional[Decimal], Optional[str]]:
+        """거래소 정밀도에 맞게 값을 조정하고, 실패 시 오류 메시지를 반환합니다."""
         if value is None:
-            return None
+            return None, None
         
         try:
             if value_type == 'price':
                 adjusted_str = self.exchange_base.exchange.price_to_precision(symbol, float(value))
-                return Decimal(adjusted_str)
+                return Decimal(adjusted_str), None
             elif value_type == 'amount':
                 adjusted_str = self.exchange_base.exchange.amount_to_precision(symbol, float(value))
-                return Decimal(adjusted_str)
+                return Decimal(adjusted_str), None
         except Exception as e:
-            self.logger.warning(f"{value_type} 정밀도 조정 실패 (심볼: {symbol}, 값: {value}): {e}")
+            error_message = f"{value_type} 정밀도 조정 실패 (심볼: {symbol}, 값: {value}): {e}"
+            self.logger.warning(error_message)
+            return None, error_message
         
-        return value
+        return value, None
 
-    async def parse(self, text: str) -> Optional[TradeCommand]:
+    async def parse(self, text: str) -> Optional[TradeCommand] | str:
         """주어진 텍스트를 파싱하여 TradeCommand 객체로 변환합니다."""
         entities = self.extractor.extract_entities(text)
         # 코인을 찾지 못한 경우 마켓 정보를 갱신하고 다시 시도
@@ -469,17 +471,25 @@ class TradeCommandParser:
                 self.logger.error(f"마켓 정보 갱신 실패: {e}")
 
         if not entities.get("intent") or not entities.get("coin"):
-            self.logger.warning(f"Parse failed for text: '{text}'. Missing intent or coin.")
-            return None
+            error_message = f"Parse failed for text: '{text}'. Missing intent or coin."
+            self.logger.warning(error_message)
+            return error_message
         
         coin_symbol = str(entities["coin"])
         market_symbol = f"{coin_symbol}/{self.exchange_base.quote_currency}"
 
         # 초기 추출된 가격/수량 정밀도 조정
         if entities.get("price") is not None:
-            entities["price"] = self._adjust_precision(entities["price"], market_symbol, 'price')
+            adjusted_price, error = self._adjust_precision(entities["price"], market_symbol, 'price')
+            if error:
+                return error
+            entities["price"] = adjusted_price
+
         if entities.get("amount") is not None:
-            entities["amount"] = self._adjust_precision(entities["amount"], market_symbol, 'amount')
+            adjusted_amount, error = self._adjust_precision(entities["amount"], market_symbol, 'amount')
+            if error:
+                return error
+            entities["amount"] = adjusted_amount
 
         # 상대 가격 주문 처리
         if entities.get("relative_price") is not None:
@@ -492,7 +502,9 @@ class TradeCommandParser:
                 base_price = Decimal(str(base_price_num))
                 calculated_price = base_price * (Decimal('1') + relative_price_percentage / Decimal('100'))
                 
-                adjusted_price = self._adjust_precision(calculated_price, market_symbol, 'price')
+                adjusted_price, error = self._adjust_precision(calculated_price, market_symbol, 'price')
+                if error:
+                    return error
                 entities['price'] = adjusted_price
                 
                 self.logger.info(
@@ -500,8 +512,9 @@ class TradeCommandParser:
                     f"지정가 {calculated_price}, 정밀도 조정 후: {adjusted_price}"
                 )
             else:
-                self.logger.error(f"'{coin_symbol}'의 호가를 가져올 수 없어 상대 가격 주문을 처리할 수 없습니다.")
-                return None
+                error_message = f"'{coin_symbol}'의 호가를 가져올 수 없어 상대 가격 주문을 처리할 수 없습니다."
+                self.logger.error(error_message)
+                return error_message
 
         # 암시적 현재가 주문 처리
         elif entities.get("current_price_order") and entities.get("price") is None:
@@ -510,17 +523,21 @@ class TradeCommandParser:
                 price_to_set_num = order_book['bid'] if entities.get("intent") == 'buy' else order_book['ask']
                 price_to_set = Decimal(str(price_to_set_num))
                 
-                adjusted_price = self._adjust_precision(price_to_set, market_symbol, 'price')
+                adjusted_price, error = self._adjust_precision(price_to_set, market_symbol, 'price')
+                if error:
+                    return error
                 entities['price'] = adjusted_price
                 
                 self.logger.info(f"암시적 현재가 설정: 지정가 {price_to_set}, 정밀도 조정 후: {adjusted_price}")
             else:
-                self.logger.error(f"'{coin_symbol}'의 호가를 가져올 수 없어 현재가 주문을 처리할 수 없습니다.")
-                return None
+                error_message = f"'{coin_symbol}'의 호가를 가져올 수 없어 현재가 주문을 처리할 수 없습니다."
+                self.logger.error(error_message)
+                return error_message
 
         if entities.get("amount") is None and entities.get("relative_amount") is None and entities.get("total_cost") is None:
-            self.logger.warning(f"Parse failed for text: '{text}'. Missing amount information.")
-            return None
+            error_message = f"Parse failed for text: '{text}'. Missing amount information."
+            self.logger.warning(error_message)
+            return error_message
 
         final_amount = entities.get("amount")
         total_cost = entities.get("total_cost")
@@ -531,49 +548,58 @@ class TradeCommandParser:
             if price_to_use is None:
                 price_num = await self.executor.get_current_price(coin_symbol)
                 if price_num:
-                    price_to_use = self._adjust_precision(Decimal(str(price_num)), market_symbol, 'price')
+                    price_to_use, error = self._adjust_precision(Decimal(str(price_num)), market_symbol, 'price')
+                    if error:
+                        return error
 
             if price_to_use is not None and price_to_use > Decimal('0'):
                 calculated_amount = total_cost / price_to_use
-                final_amount = self._adjust_precision(calculated_amount, market_symbol, 'amount')
+                final_amount, error = self._adjust_precision(calculated_amount, market_symbol, 'amount')
+                if error:
+                    return error
+
                 quote_currency = self.executor.quote_currency
                 self.logger.info(
                     f"계산된 수량: {total_cost} {quote_currency} / {price_to_use} {quote_currency}/coin -> "
                     f"{calculated_amount}, 정밀도 조정 후: {final_amount}"
                 )
             else:
-                self.logger.error(f"'{coin_symbol}'의 현재 가격을 가져올 수 없어 총 비용 기반 주문을 처리할 수 없습니다.")
-                return None
+                error_message = f"'{coin_symbol}'의 현재 가격을 가져올 수 없어 총 비용 기반 주문을 처리할 수 없습니다."
+                self.logger.error(error_message)
+                return error_message
 
         # 상대 수량 주문 처리
         relative_amount_str = entities.get("relative_amount")
         if relative_amount_str:
             balance_info = self.exchange_base.balances_cache.get(coin_symbol, {})
             
-            # 매도일 경우 'free' 잔고를, 매수일 경우 'total_amount'를 기준으로 할 수 있으나,
-            # 일반적으로 보유 자산의 %를 사용하는 것은 매도이므로 'free'를 기준으로 합니다.
-            # '전부 매수' 같은 경우는 총액 기반으로 해석되는 것이 자연스럽습니다.
             current_holding = balance_info.get('free', Decimal('0'))
 
             if current_holding <= Decimal('0'):
-                self.logger.warning(f"상대 수량을 처리할 수 없습니다. '{coin_symbol}'의 보유량이 없습니다.")
-                return None
+                error_message = f"상대 수량을 처리할 수 없습니다. '{coin_symbol}'의 보유량이 없습니다."
+                self.logger.warning(error_message)
+                return error_message
 
             try:
                 percentage = Decimal(relative_amount_str)
                 calculated_amount = current_holding * (percentage / Decimal('100'))
-                final_amount = self._adjust_precision(calculated_amount, market_symbol, 'amount')
+                final_amount, error = self._adjust_precision(calculated_amount, market_symbol, 'amount')
+                if error:
+                    return error
+
                 self.logger.info(
                     f"계산된 수량: {percentage}% of {current_holding} {coin_symbol} -> {calculated_amount}, "
                     f"정밀도 조정 후: {final_amount}"
                 )
             except InvalidOperation:
-                self.logger.error(f"잘못된 상대 수량 값입니다: '{relative_amount_str}'")
-                return None
+                error_message = f"잘못된 상대 수량 값입니다: '{relative_amount_str}'"
+                self.logger.error(error_message)
+                return error_message
 
         if final_amount is not None and final_amount <= Decimal('0'):
-            self.logger.warning(f"계산된 거래 수량이 0 이하({final_amount})이므로 거래를 진행할 수 없습니다.")
-            return None
+            error_message = f"계산된 거래 수량이 0 이하({final_amount})이므로 거래를 진행할 수 없습니다."
+            self.logger.warning(error_message)
+            return error_message
 
         return TradeCommand(
             intent=str(entities["intent"]),
