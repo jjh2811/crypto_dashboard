@@ -178,6 +178,14 @@ body {
     color: #dc3545; /* Red for sell */
 }
 
+.crypto-card .diff-positive {
+    color: #28a745; /* Green for positive difference (profit) */
+}
+
+.crypto-card .diff-negative {
+    color: #dc3545; /* Red for negative difference (loss) */
+}
+
 .crypto-card .date {
     font-size: 0.8em;
     color: #6c757d;

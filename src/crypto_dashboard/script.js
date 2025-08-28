@@ -309,17 +309,21 @@ document.addEventListener("DOMContentLoaded", () => {
             const priceDiffElement = card.querySelector('.price-diff-value');
 
             if (currentPrice && priceDiffElement) {
-                const priceDiff = currentPrice > 0 ? ((order.price - currentPrice) / currentPrice) * 100 : 0;
-                
+                const priceDifference = order.price - currentPrice;
+                const priceDiffPercent = currentPrice > 0 ? (priceDifference / currentPrice) * 100 : 0;
+
                 let diffClass;
-                if (order.side.toLowerCase() === 'buy') {
-                    diffClass = priceDiff > 0 ? 'side-buy' : 'side-sell';
-                } else { // SELL
-                    diffClass = priceDiff < 0 ? 'side-buy' : 'side-sell';
+                if (priceDifference > 0) {
+                    diffClass = 'diff-positive';
+                } else if (priceDifference < 0) {
+                    diffClass = 'diff-negative';
+                } else {
+                    diffClass = 'profit-neutral';
                 }
 
                 priceDiffElement.className = `info-value price-diff-value ${diffClass}`;
-                priceDiffElement.textContent = `${priceDiff.toFixed(2)}%`;
+                const formattedAmount = priceDifference > 0 ? `+${formatNumber(priceDifference)}` : formatNumber(priceDifference);
+                priceDiffElement.textContent = `${formattedAmount} (${priceDiffPercent.toFixed(2)}%)`;
             }
         });
     }
@@ -430,14 +434,18 @@ document.addEventListener("DOMContentLoaded", () => {
         let priceDiffText = '-';
         let diffClass = '';
         if (currentPrice) {
-            const priceDiff = currentPrice > 0 ? ((order.price - currentPrice) / currentPrice) * 100 : 0;
-            
-            if (order.side.toLowerCase() === 'buy') {
-                diffClass = priceDiff > 0 ? 'side-buy' : 'side-sell';
-            } else { // SELL
-                diffClass = priceDiff < 0 ? 'side-buy' : 'side-sell';
+            const priceDifference = order.price - currentPrice;
+            const priceDiffPercent = currentPrice > 0 ? (priceDifference / currentPrice) * 100 : 0;
+
+            if (priceDifference > 0) {
+                diffClass = 'diff-positive';
+            } else if (priceDifference < 0) {
+                diffClass = 'diff-negative';
+            } else {
+                diffClass = 'profit-neutral';
             }
-            priceDiffText = `${priceDiff.toFixed(2)}%`;
+            const formattedAmount = priceDifference > 0 ? `+${formatNumber(priceDifference)}` : formatNumber(priceDifference);
+            priceDiffText = `${formattedAmount} (${priceDiffPercent.toFixed(2)}%)`;
         }
 
         const amount = parseFloat(order.amount) || 0;
