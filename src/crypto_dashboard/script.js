@@ -519,7 +519,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <span class="info-value">${parseFloat(avg_buy_price.toPrecision(8))}</span>
                 </div>
                 <div class="info-row">
-                    <span class="info-label">P/L:</span>
+                    <span class="info-label">ROI:</span>
                     <span class="info-value ${profitClass}">${profitPercent.toFixed(2)}%</span>
                 </div>
             `;
@@ -530,7 +530,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <span class="info-value">-</span>
                 </div>
                 <div class="info-row">
-                    <span class="info-label">P/L:</span>
+                    <span class="info-label">ROI:</span>
                     <span class="info-value">-</span>
                 </div>
             `;
