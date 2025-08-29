@@ -266,7 +266,11 @@ document.addEventListener("DOMContentLoaded", () => {
         updateTotalValue();
 
         if (modal.style.display === "block" && document.getElementById("modal-crypto-name").textContent === symbol) {
-            openDetailsModal(card.dataset);
+            const currentCryptoId = modal.dataset.currentCryptoId;
+            const currentExchange = currentCryptoId ? currentCryptoId.split('_')[0] : null;
+            if (currentExchange === exchange) {
+                openDetailsModal(card.dataset);
+            }
         }
     }
 
@@ -572,7 +576,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function openDetailsModal(dataset) {
-        document.getElementById("modal-crypto-name").textContent = dataset.symbol;
+        const symbol = dataset.symbol;
+        const exchange = dataset.exchange;
+        document.getElementById("modal-crypto-name").textContent = symbol;
         const free = parseFloat(dataset.free || 0);
         const locked = parseFloat(dataset.locked || 0);
         const total = free + locked;
@@ -581,7 +587,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const unrealised_pnl = parseFloat(dataset.unrealised_pnl);
 
         const balanceDetailsContainer = document.getElementById("modal-crypto-balance-details");
-        
+
         const formatPnl = (pnl) => {
             if (isNaN(pnl)) {
                 return '<span class="info-value profit-neutral">-</span>';
@@ -605,7 +611,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${formatPnl(realised_pnl)}
             </div>
         `;
-        
+
+        // 모달에 현재 표시중인 코인의 ID 저장
+        modal.dataset.currentCryptoId = `${exchange}_${symbol}`;
+
         modal.style.display = "block";
     }
 
@@ -619,19 +628,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function updateModalUnrealisedPnL(symbol, price) {
-        if (modal.style.display === "block" && document.getElementById("modal-crypto-name").textContent === symbol) {
-            const card = document.getElementById(symbol);
-            if (card) {
-                const avg_buy_price = parseFloat(card.dataset.avg_buy_price);
-                const free = parseFloat(card.dataset.free || 0);
-                const locked = parseFloat(card.dataset.locked || 0);
-                const totalAmount = free + locked;
-                if (avg_buy_price && totalAmount) {
-                    const unrealised_pnl = (price - avg_buy_price) * totalAmount;
-                    const pnlElement = modal.querySelector("#modal-crypto-balance-details .info-row:nth-child(2) .info-value");
-                    if (pnlElement) {
-                        pnlElement.textContent = (unrealised_pnl > 0 ? '+' : '') + unrealised_pnl.toFixed(3);
-                        pnlElement.className = `info-value ${unrealised_pnl >= 0 ? 'profit-positive' : 'profit-negative'}`;
+        if (modal.style.display === "block") {
+            const currentCryptoId = modal.dataset.currentCryptoId;
+            if (currentCryptoId) {
+                const [exchange, currentSymbol] = currentCryptoId.split('_');
+                if (currentSymbol === symbol) {
+                    const card = document.getElementById(currentCryptoId);
+                    if (card) {
+                        const avg_buy_price = parseFloat(card.dataset.avg_buy_price);
+                        const free = parseFloat(card.dataset.free || 0);
+                        const locked = parseFloat(card.dataset.locked || 0);
+                        const totalAmount = free + locked;
+                        if (avg_buy_price && totalAmount) {
+                            const unrealised_pnl = (price - avg_buy_price) * totalAmount;
+                            const pnlElement = modal.querySelector("#modal-crypto-balance-details .info-row:nth-child(2) .info-value");
+                            if (pnlElement) {
+                                pnlElement.textContent = (unrealised_pnl > 0 ? '+' : '') + unrealised_pnl.toFixed(3);
+                                pnlElement.className = `info-value ${unrealised_pnl >= 0 ? 'profit-positive' : 'profit-negative'}`;
+                            }
+                        }
                     }
                 }
             }
