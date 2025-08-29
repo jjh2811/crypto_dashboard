@@ -1,7 +1,6 @@
 import asyncio
 from dataclasses import asdict
 from datetime import datetime, timezone
-import importlib
 import json
 import logging
 import os
@@ -9,8 +8,7 @@ import secrets
 
 from aiohttp import web
 
-from .binance import BinanceExchange
-from .upbit import UpbitExchange
+from .generic_exchange import GenericExchange
 from .nlptrade import TradeCommand, format_trade_command_for_confirmation
 
 SECRET_TOKEN = secrets.token_hex(32)
@@ -358,8 +356,7 @@ async def on_startup(app):
         try:
             logger.info(f"Preparing to initialize exchange: {exchange_name}")
 
-            testnet = exchange_config.get('testnet', {}).get('use', False)
-            api_key_section = f"{exchange_name}_testnet" if testnet else exchange_name
+            api_key_section = f"{exchange_name}_testnet" if exchange_config.get('testnet', {}).get('use', False) else exchange_name
 
             if api_key_section not in secrets_data.get('exchanges', {}):
                 logger.error(f"API keys for '{api_key_section}' not found in secrets.json")
@@ -372,13 +369,7 @@ async def on_startup(app):
                 logger.warning(f"Please replace placeholder keys in secrets.json for {api_key_section}.")
                 continue
 
-            module_name = f".{exchange_name}"
-            class_name = f"{exchange_name.capitalize()}Exchange"
-
-            module = importlib.import_module(module_name, package=__package__)
-            exchange_class = getattr(module, class_name)
-
-            exchange_instance = exchange_class(api_key, secret_key, app, exchange_name)
+            exchange_instance = GenericExchange(api_key, secret_key, app, exchange_name)
 
             init_tasks.append(exchange_instance.get_initial_data())
             pending_exchanges.append(exchange_instance)

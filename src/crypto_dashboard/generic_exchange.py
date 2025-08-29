@@ -3,15 +3,26 @@ from decimal import Decimal
 from typing import Any, Dict, Set, cast
 
 import ccxt.pro as ccxtpro
+from aiohttp import web
 
 from .exchange_base import ExchangeBase
-from .protocols import ExchangeProtocol
 from .exchange_utils import calculate_average_buy_price
+from .protocols import Balances, ExchangeProtocol
 
 
-class UpbitExchange(ExchangeBase):
+class GenericExchange(ExchangeBase):
+    def __init__(self, api_key: str, secret_key: str, app: web.Application, exchange_name: str) -> None:
+        self.testnet = False
+        self.whitelist = []
+        super().__init__(api_key, secret_key, app, exchange_name)
+
     def _create_exchange_instance(self, api_key: str, secret_key: str, exchange_config: Dict[str, Any]) -> ExchangeProtocol:
-        exchange = ccxtpro.upbit({
+        if 'testnet' in exchange_config and exchange_config['testnet'].get('use', False):
+            self.testnet = True
+            self.whitelist = exchange_config['testnet'].get('whitelist', [])
+
+        exchange_class = getattr(ccxtpro, self.name)
+        exchange = exchange_class({
             'apiKey': api_key,
             'secret': secret_key,
             'enableRateLimit': True,
@@ -20,7 +31,21 @@ class UpbitExchange(ExchangeBase):
                 'warnOnFetchOpenOrdersWithoutSymbol': False,
             },
         })
+
+        if self.testnet:
+            exchange.set_sandbox_mode(True)
+
         return cast(ExchangeProtocol, exchange)
+
+    async def _process_initial_balances(self, balance: Balances, total_balances: Dict[str, float]):
+        if self.name == 'binance' and self.testnet:
+            original_assets = list(total_balances.keys())
+            total_balances = {
+                asset: total for asset, total in total_balances.items() if asset in self.whitelist
+            }
+            self.logger.info(f"Testnet mode: Filtering balances with whitelist {self.whitelist}. Kept: {list(total_balances.keys())} from {original_assets}")
+
+        await super()._process_initial_balances(balance, total_balances)
 
     async def watch_tickers_loop(self) -> None:
         while True:
@@ -50,7 +75,7 @@ class UpbitExchange(ExchangeBase):
                     await self.app['broadcast_message'](update_message)
 
             except Exception as e:
-                self.logger.error(f"An error occurred in watch_tickers_loop for Upbit: {e}", exc_info=True)
+                self.logger.error(f"An error occurred in watch_tickers_loop for {self.name}: {e}", exc_info=True)
                 await asyncio.sleep(5)
 
     async def watch_balance_loop(self) -> None:
@@ -58,6 +83,9 @@ class UpbitExchange(ExchangeBase):
             try:
                 balance = await self.exchange.watch_balance()
                 for asset, bal in balance.items():
+                    if self.testnet and asset not in self.whitelist:
+                        continue
+
                     free_amount = Decimal(bal.get('free') or '0')
                     locked_amount = Decimal(bal.get('used') or '0')
                     total_amount = free_amount + locked_amount
@@ -86,7 +114,7 @@ class UpbitExchange(ExchangeBase):
                         self._handle_zero_balance(asset, is_existing)
 
             except Exception as e:
-                self.logger.error(f"Error in Upbit watch_balance_loop: {e}", exc_info=True)
+                self.logger.error(f"Error in {self.name} watch_balance_loop: {e}", exc_info=True)
                 await asyncio.sleep(5)
 
     async def watch_orders_loop(self) -> None:
@@ -149,9 +177,8 @@ class UpbitExchange(ExchangeBase):
                         self.logger.info(f"Average price for {asset} updated to {new_avg_price} by trade.")
 
             except Exception as e:
-                self.logger.error(f"Error in Upbit watch_orders_loop: {e}", exc_info=True)
+                self.logger.error(f"Error in {self.name} watch_orders_loop: {e}", exc_info=True)
                 await asyncio.sleep(5)
 
     def _get_order_asset_names(self) -> Set[str]:
-        """업비트 주문에서 자산 이름 추출"""
         return {o['symbol'].split('/')[0] for o in self.orders_cache.values() if o.get('symbol')}
