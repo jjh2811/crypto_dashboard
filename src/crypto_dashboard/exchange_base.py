@@ -348,5 +348,17 @@ class ExchangeBase(ABC):
         """주문에서 자산 이름들을 추출 (자식 클래스에서 구현)"""
         raise NotImplementedError("거래소별 주문 자산 추출 로직을 구현해야 합니다")
 
+    @abstractmethod
+    async def watch_tickers_loop(self) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def watch_balance_loop(self) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def watch_orders_loop(self) -> None:
+        raise NotImplementedError
+
     async def close(self) -> None:
         await self.exchange.close()
