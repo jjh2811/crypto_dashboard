@@ -9,6 +9,8 @@ import secrets
 
 from aiohttp import web
 
+from .binance import BinanceExchange
+from .upbit import UpbitExchange
 from .nlptrade import TradeCommand, format_trade_command_for_confirmation
 
 SECRET_TOKEN = secrets.token_hex(32)
@@ -401,14 +403,20 @@ async def on_startup(app):
             logger.error(f"Error during {exchange_name} exchange initialization: {result}")
         else:
             app['exchanges'][exchange_name] = instance
-            price_ws_task = asyncio.create_task(instance.connect_price_ws())
-            user_data_ws_task = asyncio.create_task(instance.connect_user_data_ws())
-            app['exchange_tasks'].extend([price_ws_task, user_data_ws_task])
+            if isinstance(instance, (BinanceExchange, UpbitExchange)):
+                tickers_task = asyncio.create_task(instance.watch_tickers_loop())
+                balance_task = asyncio.create_task(instance.watch_balance_loop())
+                orders_task = asyncio.create_task(instance.watch_orders_loop())
+                app['exchange_tasks'].extend([tickers_task, balance_task, orders_task])
+            else:
+                price_ws_task = asyncio.create_task(instance.connect_price_ws())
+                user_data_ws_task = asyncio.create_task(instance.connect_user_data_ws())
+                app['exchange_tasks'].extend([price_ws_task, user_data_ws_task])
 
-            await instance.price_ws_connected_event.wait()
-            if hasattr(instance, 'logon_successful_event'):
-                await instance.logon_successful_event.wait()
-            await instance.user_data_subscribed_event.wait()
+                await instance.price_ws_connected_event.wait()
+                if hasattr(instance, 'logon_successful_event'):
+                    await instance.logon_successful_event.wait()
+                await instance.user_data_subscribed_event.wait()
             logger.info(f"Successfully initialized and connected to {exchange_name}.")
 
     logger.info("All exchange initializations complete.")

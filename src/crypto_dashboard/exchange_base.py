@@ -7,7 +7,6 @@ import os
 from typing import Any, Dict, List, Optional, Set, cast
 
 from aiohttp import web
-from websockets.legacy.client import WebSocketClientProtocol
 
 from .exchange_utils import calculate_average_buy_price
 from .nlptrade import EntityExtractor, TradeCommandParser, TradeExecutor
@@ -32,10 +31,6 @@ class ExchangeBase(ABC):
         self.balances_cache: Dict[str, Dict[str, Any]] = {}
         self.orders_cache: Dict[str, Dict[str, Any]] = {}
         self.order_prices: Dict[str, Decimal] = {}  # 주문 코인들의 가격 캐시
-        self.userdata_ws: Optional[WebSocketClientProtocol] = None
-        self.price_ws: Optional[WebSocketClientProtocol] = None
-        self.price_ws_connected_event = asyncio.Event()
-        self.user_data_subscribed_event = asyncio.Event()
         self.tracked_assets = set()
         self._ws_id_counter = 1
 
@@ -213,17 +208,7 @@ class ExchangeBase(ABC):
             for asset, total_amount in total_balances.items():
                 tg.create_task(process_single_asset(asset, total_amount))
 
-    @abstractmethod
-    async def connect_price_ws(self) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def connect_user_data_ws(self) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def update_subscriptions_if_needed(self) -> None:
-        raise NotImplementedError
+    
 
     async def cancel_order(self, order_id: str, symbol: str) -> None:
         try:

@@ -1,17 +1,9 @@
 import asyncio
-import base64
 from decimal import Decimal
-import json
-import time
 from typing import Any, Dict, List, Set, cast
 
 from aiohttp import web
-from ccxt.async_support import binance
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ed25519
-from websockets.exceptions import ConnectionClosed, ConnectionClosedError
-from websockets.legacy.client import WebSocketClientProtocol, connect
-from websockets.protocol import State
+import ccxt.pro as ccxtpro
 
 from .exchange_base import ExchangeBase
 from .exchange_utils import calculate_average_buy_price
@@ -21,15 +13,12 @@ from .protocols import Balances, ExchangeProtocol
 class BinanceExchange(ExchangeBase):
     def __init__(self, api_key: str, secret_key: str, app: web.Application, exchange_name: str) -> None:
         super().__init__(api_key, secret_key, app, exchange_name)
-        self.logon_successful_event = asyncio.Event()
 
     def _create_exchange_instance(self, api_key: str, secret_key: str, exchange_config: Dict[str, Any]) -> ExchangeProtocol:
         self.testnet = exchange_config['testnet']['use']
         self.whitelist = exchange_config['testnet']['whitelist'] if self.testnet else []
-        self.price_ws_url = exchange_config['testnet']['price_ws_url'] if self.testnet else exchange_config['price_ws_url']
-        self.user_data_ws_url = exchange_config['testnet']['user_data_ws_url'] if self.testnet else exchange_config['user_data_ws_url']
 
-        exchange = binance({
+        exchange = ccxtpro.binance({
             'apiKey': api_key,
             'secret': secret_key,
             'enableRateLimit': True,
@@ -54,325 +43,167 @@ class BinanceExchange(ExchangeBase):
 
         await super()._process_initial_balances(balance, total_balances)
 
-    async def _logon(self, userdata_ws: WebSocketClientProtocol) -> None:
-        try:
-            private_key = serialization.load_pem_private_key(
-                self.exchange.secret.encode('utf-8'),
-                password=None
-            )
-            if not isinstance(private_key, ed25519.Ed25519PrivateKey):
-                raise TypeError("The provided key is not an Ed25519 private key.")
-
-            timestamp = str(int(time.time() * 1000))
-            payload = f"apiKey={self.exchange.apiKey}&timestamp={timestamp}"
-            signature = base64.b64encode(private_key.sign(payload.encode('utf-8'))).decode('utf-8')
-
-            logon_request = {
-                "id": "logon_request",
-                "method": "session.logon",
-                "params": {
-                    "apiKey": self.exchange.apiKey,
-                    "timestamp": timestamp,
-                    "signature": signature,
-                },
-            }
-            await userdata_ws.send(json.dumps(logon_request))
-            self.logger.info("Logon request sent.")
-        except Exception as e:
-            self.logger.error(f"Error during logon: {e}", exc_info=True)
-            raise
-
-    async def _subscribe(self, userdata_ws: WebSocketClientProtocol) -> None:
-        subscribe_request = {
-            "id": "subscribe_request",
-            "method": "userDataStream.subscribe",
-            "params": {}
-        }
-        await userdata_ws.send(json.dumps(subscribe_request))
-        self.logger.info("User data stream subscribe request sent.")
-
-    async def connect_price_ws(self) -> None:
+    async def watch_tickers_loop(self) -> None:
         while True:
             try:
-                async with connect(self.price_ws_url) as websocket:
-                    self.price_ws = websocket
-                    self.logger.info("Price data websocket connection established.")
-                    self.price_ws_connected_event.set()
+                symbols = [f"{asset}/{self.quote_currency}" for asset in self.tracked_assets if asset != self.quote_currency]
+                tickers = await self.exchange.watch_tickers(symbols)
+                for symbol, ticker in tickers.items():
+                    asset = symbol.split('/')[0]
+                    price = ticker.get('last')
+                    if not asset or not price:
+                        continue
+                    self.logger.debug(f"Price received: {asset} = {price}")
 
-                    if self.tracked_assets:
-                        assets_to_subscribe = [asset for asset in self.tracked_assets if asset != 'USDT']
-                        streams = [f"{asset.lower()}usdt@miniTicker" for asset in assets_to_subscribe]
-                        if streams:
-                            await websocket.send(json.dumps({
-                                "method": "SUBSCRIBE",
-                                "params": streams,
-                                "id": 1
-                            }))
-                            self.logger.info(f"Initial subscription sent for: {streams}")
+                    if asset in self.balances_cache:
+                        self.balances_cache[asset]['price'] = Decimal(price)
+                        update_message = self.create_balance_update_message(asset, self.balances_cache[asset])
+                    else:
+                        update_message = {'symbol': asset, 'price': float(Decimal(price))}
 
-                    async for message in websocket:
-                        data = json.loads(message)
-                        if data.get('e') == '24hrMiniTicker':
-                            symbol = data.get('s', '').replace(self.quote_currency, '')
-                            price = data.get('c')
-                            if not symbol or not price:
-                                continue
-                            self.logger.debug(f"Price received: {symbol} = {price}")
+                    await self.app['broadcast_message'](update_message)
+            except Exception as e:
+                self.logger.error(f"An error occurred in watch_tickers_loop: {e}", exc_info=True)
+                await asyncio.sleep(5)
 
-                            if symbol in self.balances_cache:
-                                self.balances_cache[symbol]['price'] = Decimal(price)
-                                update_message = self.create_balance_update_message(symbol, self.balances_cache[symbol])
-                            else:
-                                update_message = {'symbol': symbol, 'price': float(Decimal(price))}
+    async def watch_balance_loop(self) -> None:
+        while True:
+            try:
+                balance = await self.exchange.watch_balance()
+                for asset, bal in balance.items():
+                    if self.testnet and asset not in self.whitelist:
+                        continue
 
+                    free_amount = Decimal(bal.get('free') or '0')
+                    locked_amount = Decimal(bal.get('used') or '0')
+                    total_amount = free_amount + locked_amount
+
+                    is_existing = asset in self.balances_cache
+                    is_positive_total = total_amount > Decimal('0')
+
+                    if is_positive_total:
+                        old_free = self.balances_cache.get(asset, {}).get('free', Decimal('0'))
+                        old_locked = self.balances_cache.get(asset, {}).get('locked', Decimal('0'))
+                        has_changed = (free_amount != old_free) or (locked_amount != old_locked)
+
+                        if not is_existing:
+                            self.logger.info(f"New asset detected: {asset}, free: {free_amount}, locked: {locked_amount}")
+                            self.balances_cache[asset] = {'price': 0}
+
+                        self.balances_cache[asset]['free'] = free_amount
+                        self.balances_cache[asset]['locked'] = locked_amount
+                        self.balances_cache[asset]['total_amount'] = total_amount
+
+                        if has_changed:
+                            self.logger.info(f"Balance for {asset} updated. Free: {free_amount}, Locked: {locked_amount}")
+                            if 'avg_buy_price' not in self.balances_cache[asset]:
+                                 avg_buy_price, realised_pnl = await calculate_average_buy_price(self.exchange, asset, total_amount, self.quote_currency, self.logger)
+                                 self.balances_cache[asset]['avg_buy_price'] = avg_buy_price
+                                 self.balances_cache[asset]['realised_pnl'] = realised_pnl
+
+                            update_message = self.create_balance_update_message(asset, self.balances_cache[asset])
                             await self.app['broadcast_message'](update_message)
-                        elif 'result' in data and data.get('result') is None:
-                            self.logger.info(f"Subscription response received: {data}")
 
-            except (ConnectionClosed, ConnectionClosedError):
-                self.logger.warning("Price data websocket connection closed. Reconnecting in 5 seconds...")
-                self.price_ws = None
-                await asyncio.sleep(5)
+                        if asset == self.quote_currency and self.balances_cache[asset].get('price', 0) == 0:
+                            self.balances_cache[asset]['price'] = 1.0
+
+                    elif not is_positive_total and is_existing:
+                        self._handle_zero_balance(asset, is_existing)
+
             except Exception as e:
-                self.logger.error(f"An error occurred in connect_price_ws: {e}", exc_info=True)
-                self.price_ws = None
+                self.logger.error(f"Error in watch_balance_loop: {e}", exc_info=True)
                 await asyncio.sleep(5)
 
-    async def connect_user_data_ws(self) -> None:
-        self.logger.info(f"Connecting to Binance User Data Stream: {self.user_data_ws_url}")
-
+    async def watch_orders_loop(self) -> None:
         while True:
             try:
-                async with connect(self.user_data_ws_url) as websocket:
-                    self.userdata_ws = websocket
-                    await self._logon(websocket)
+                orders = await self.exchange.watch_orders()
+                for order in orders:
+                    order_id = order.get('id')
+                    symbol = order.get('symbol')
+                    status = order.get('status')
+                    if not all([order_id, symbol, status]):
+                        continue
 
-                    while True:
-                        message = await websocket.recv()
-                        raw_data = json.loads(message)
+                    price = Decimal(order.get('price') or '0')
+                    original_amount = Decimal(order.get('amount') or '0')
+                    filled = Decimal(order.get('filled') or '0')
+                    side = order.get('side')
+                    if not all([order_id, symbol, status]):
+                        continue
 
-                        if 'id' in raw_data:
-                            data = raw_data
-                            if data['id'] == 'logon_request':
-                                if data.get('status') == 200:
-                                    self.logger.info("Logon successful.")
-                                    self.logon_successful_event.set()
-                                    await self._subscribe(websocket)
+                    asset = symbol.replace(self.quote_currency, '') if symbol else None
+                    if not asset:
+                        continue
+
+
+                    log_payload: Dict[str, Any] = {
+                        'status': status,
+                        'symbol': symbol,
+                        'side': side,
+                        'order_id': order_id,
+                    }
+
+                    if status == 'open':
+                        assert order_id is not None
+                        self.orders_cache[order_id] = {
+                            'id': order_id,
+                            'symbol': symbol,
+                            'side': side,
+                            'price': float(price),
+                            'amount': float(original_amount),
+                            'filled': float(filled),
+                            'value': float(price * original_amount),
+                            'quote_currency': self.quote_currency,
+                            'timestamp': order.get('timestamp'),
+                            'status': status
+                        }
+                        self.logger.info(f"New order: {order_id} - {symbol} {status}")
+                        log_payload.update({'price': float(price), 'amount': float(original_amount)})
+                        await self.app['broadcast_log'](log_payload, self.name, self.logger)
+
+                        assert symbol is not None
+                        await self._fetch_and_update_price(symbol, asset)
+
+                    elif status == 'closed' or status == 'canceled':
+                        if order_id in self.orders_cache:
+                            del self.orders_cache[order_id]
+                            self.logger.info(f"Order {order_id} ({symbol} {status}) removed from cache.")
+
+                        if status == 'closed':
+                            log_payload.update({'price': float(order.get('average') or '0'), 'amount': float(filled)})
+
+                        await self.app['broadcast_log'](log_payload, self.name, self.logger)
+
+                    await self.app['broadcast_orders_update'](self)
+
+                    if status == 'closed' and side == 'buy':
+                        last_filled_price = Decimal(order.get('average') or '0')
+
+                        if asset in self.balances_cache and filled > 0:
+                            old_total_amount = self.balances_cache[asset].get('total_amount', Decimal('0'))
+                            old_avg_price = self.balances_cache[asset].get('avg_buy_price')
+
+                            if old_avg_price is None or old_avg_price <= 0 or old_total_amount <= 0:
+                                new_avg_price = last_filled_price
+                            else:
+                                old_cost = old_total_amount * old_avg_price
+                                fill_cost = filled * last_filled_price
+                                new_total_amount = old_total_amount + filled
+
+                                if new_total_amount > 0:
+                                    new_avg_price = (old_cost + fill_cost) / new_total_amount
                                 else:
-                                    self.logger.error(f"Logon failed: {data}")
-                                    break
-                            elif data['id'] == 'subscribe_request':
-                                if data.get('status') == 200:
-                                    self.logger.info("User data stream subscription successful.")
-                                    self.user_data_subscribed_event.set()
-                                else:
-                                    self.logger.error(f"Subscription failed: {data}")
-                                    break
-                            continue
+                                    new_avg_price = last_filled_price
 
-                        if 'event' not in raw_data:
-                            self.logger.warning(f"Received message without 'event' field: {raw_data}")
-                            continue
+                            self.balances_cache[asset]['avg_buy_price'] = new_avg_price
+                            self.balances_cache[asset]['total_amount'] = old_total_amount + filled
+                            self.logger.info(f"Average price for {asset} updated to {new_avg_price} by trade. Last fill: {filled} @ {last_filled_price}")
 
-                        data = raw_data['event']
-                        event_type = data.get('e')
-
-                        if event_type == 'outboundAccountPosition':
-                            for balance_update in data.get('B', []):
-                                asset = balance_update.get('a')
-                                if not asset:
-                                    continue
-
-                                if self.testnet and asset not in self.whitelist:
-                                    continue
-
-                                free_amount = Decimal(balance_update.get('f', '0'))
-                                locked_amount = Decimal(balance_update.get('l', '0'))
-                                total_amount = free_amount + locked_amount
-
-                                is_existing = asset in self.balances_cache
-                                is_positive_total = total_amount > Decimal('0')
-
-                                if is_positive_total:
-                                    old_free = self.balances_cache.get(asset, {}).get('free', Decimal('0'))
-                                    old_locked = self.balances_cache.get(asset, {}).get('locked', Decimal('0'))
-                                    has_changed = (free_amount != old_free) or (locked_amount != old_locked)
-
-                                    if not is_existing:
-                                        self.logger.info(f"New asset detected: {asset}, free: {free_amount}, locked: {locked_amount}")
-                                        self.balances_cache[asset] = {'price': 0}
-
-                                    self.balances_cache[asset]['free'] = free_amount
-                                    self.balances_cache[asset]['locked'] = locked_amount
-                                    self.balances_cache[asset]['total_amount'] = total_amount
-
-                                    if has_changed:
-                                        self.logger.info(f"Balance for {asset} updated. Free: {free_amount}, Locked: {locked_amount}")
-                                        if 'avg_buy_price' not in self.balances_cache[asset]:
-                                             avg_buy_price, realised_pnl = await calculate_average_buy_price(self.exchange, asset, total_amount, self.quote_currency, self.logger)
-                                             self.balances_cache[asset]['avg_buy_price'] = avg_buy_price
-                                             self.balances_cache[asset]['realised_pnl'] = realised_pnl
-
-                                        update_message = self.create_balance_update_message(asset, self.balances_cache[asset])
-                                        await self.app['broadcast_message'](update_message)
-
-                                    if asset == self.quote_currency and self.balances_cache[asset].get('price', 0) == 0:
-                                        self.balances_cache[asset]['price'] = 1.0
-
-                                    if not is_existing:
-                                        await self.update_subscriptions_if_needed()
-
-                                elif not is_positive_total and is_existing:
-                                    # 공통 로직으로 잔고 0 처리
-                                    self._handle_zero_balance(asset, is_existing)
-                                    await self.update_subscriptions_if_needed()
-
-                        elif event_type == 'executionReport':
-                            order_id = data.get('i')
-                            symbol = data.get('s')
-                            status = data.get('X')
-                            if not all([order_id, symbol, status]):
-                                continue
-
-                            price = Decimal(data.get('p', '0'))
-                            original_amount = Decimal(data.get('q', '0'))
-                            last_executed_quantity = Decimal(data.get('l', '0'))
-                            cumulative_filled_quantity = Decimal(data.get('z', '0'))
-                            side = data.get('S')
-                            asset = symbol.replace(self.quote_currency, '')
-
-
-                            log_payload: Dict[str, Any] = {
-                                'status': status,
-                                'symbol': symbol,
-                                'side': side,
-                                'order_id': order_id,
-                            }
-
-                            if status == 'NEW':
-                                self.orders_cache[order_id] = {
-                                    'id': order_id,
-                                    'symbol': symbol,
-                                    'side': side,
-                                    'price': float(price),
-                                    'amount': float(original_amount),
-                                    'filled': float(cumulative_filled_quantity),
-                                    'value': float(price * original_amount),
-                                    'quote_currency': self.quote_currency,
-                                    'timestamp': data.get('T'),
-                                    'status': status
-                                }
-                                self.logger.info(f"New order: {order_id} - {symbol} {status}")
-                                log_payload.update({'price': float(price), 'amount': float(original_amount)})
-                                await self.app['broadcast_log'](log_payload, self.name, self.logger)
-
-                                # Fetch current price immediately for accurate diff calculation
-                                await self._fetch_and_update_price(symbol, asset)
-
-                            elif status == 'PARTIALLY_FILLED':
-                                if order_id in self.orders_cache:
-                                    self.orders_cache[order_id]['filled'] = float(cumulative_filled_quantity)
-                                    self.orders_cache[order_id]['status'] = status
-                                    self.logger.info(f"Updated order: {order_id} - {symbol} {status}, Filled: {cumulative_filled_quantity}")
-                                else: # If order is not in cache, treat it as new
-                                    self.orders_cache[order_id] = {
-                                        'id': order_id,
-                                        'symbol': symbol,
-                                        'side': side,
-                                        'price': float(price),
-                                        'amount': float(original_amount),
-                                        'filled': float(cumulative_filled_quantity),
-                                        'value': float(price * original_amount),
-                                        'quote_currency': self.quote_currency,
-                                        'timestamp': data.get('T'),
-                                        'status': status
-                                    }
-                                    self.logger.info(f"New (partially filled) order: {order_id} - {symbol} {status}")
-
-                                log_payload.update({'price': float(price), 'amount': float(last_executed_quantity)})
-                                await self.app['broadcast_log'](log_payload, self.name, self.logger)
-
-                            elif status in ['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED']:
-                                if order_id in self.orders_cache:
-                                    del self.orders_cache[order_id]
-                                    self.logger.info(f"Order {order_id} ({symbol} {status}) removed from cache.")
-
-                                if status == 'FILLED':
-                                    log_payload.update({'price': float(data.get('L', '0')), 'amount': float(last_executed_quantity)})
-
-                                await self.app['broadcast_log'](log_payload, self.name, self.logger)
-
-                            await self.app['broadcast_orders_update'](self)
-
-                            if status in ['PARTIALLY_FILLED', 'FILLED'] and side == 'BUY':
-                                last_filled_price = Decimal(data.get('L', '0'))
-
-                                if asset in self.balances_cache and last_executed_quantity > 0:
-                                    old_total_amount = self.balances_cache[asset].get('total_amount', Decimal('0'))
-                                    old_avg_price = self.balances_cache[asset].get('avg_buy_price')
-
-                                    if old_avg_price is None or old_avg_price <= 0 or old_total_amount <= 0:
-                                        new_avg_price = last_filled_price
-                                    else:
-                                        old_cost = old_total_amount * old_avg_price
-                                        fill_cost = last_executed_quantity * last_filled_price
-                                        new_total_amount = old_total_amount + last_executed_quantity
-
-                                        if new_total_amount > 0:
-                                            new_avg_price = (old_cost + fill_cost) / new_total_amount
-                                        else:
-                                            new_avg_price = last_filled_price
-
-                                    self.balances_cache[asset]['avg_buy_price'] = new_avg_price
-                                    self.balances_cache[asset]['total_amount'] = old_total_amount + last_executed_quantity
-                                    self.logger.info(f"Average price for {asset} updated to {new_avg_price} by trade. Last fill: {last_executed_quantity} @ {last_filled_price}")
-
-                            await self.update_subscriptions_if_needed()
-
-            except ConnectionClosed:
-                self.logger.warning("User Data Stream connection closed. Reconnecting in 5 seconds...")
-                self.userdata_ws = None
-                await asyncio.sleep(5)
             except Exception as e:
-                self.logger.error(f"Error in User Data Stream fetcher: {e}", exc_info=True)
-                self.userdata_ws = None
+                self.logger.error(f"Error in watch_orders_loop: {e}", exc_info=True)
                 await asyncio.sleep(5)
 
     def _get_order_asset_names(self) -> Set[str]:
         """바이낸스 주문에서 자산 이름 추출"""
         return {order.get('symbol', '').replace(self.quote_currency, '').replace('/', '') for order in self.orders_cache.values()}
-
-    async def update_subscriptions_if_needed(self) -> None:
-        lock = self.app.get('subscription_lock')
-        if not lock:
-            return
-
-        async with lock:
-            websocket = self.price_ws
-            if not websocket or websocket.state != State.OPEN:
-                self.logger.warning("Price websocket not available for subscription update.")
-                return
-
-            async def send_subscription_message(method: str, assets: List[str]) -> None:
-                if not assets:
-                    return
-                streams = [f"{asset.lower()}usdt@miniTicker" for asset in assets]
-                request_id = self._ws_id_counter
-                self._ws_id_counter += 1
-                message = json.dumps({"method": method, "params": streams, "id": request_id})
-                await websocket.send(message)
-                self.logger.info(f"Sent {method} for: {streams} with ID: {request_id}")
-
-            holding_assets = set(self.balances_cache.keys())
-            order_assets = self._get_order_asset_names()
-            required_assets = (holding_assets | order_assets)
-
-            to_add = required_assets - self.tracked_assets
-            to_remove = self.tracked_assets - required_assets
-
-            await send_subscription_message("SUBSCRIBE", [asset for asset in to_add if asset != self.quote_currency])
-            await send_subscription_message("UNSUBSCRIBE", [asset for asset in to_remove if asset != self.quote_currency])
-
-            self.tracked_assets = required_assets
-            if to_add or to_remove:
-                self.logger.info(f"Subscription updated. Added: {to_add}, Removed: {to_remove}. Current: {required_assets}")
