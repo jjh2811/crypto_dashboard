@@ -179,19 +179,39 @@ class ExchangeBase(ABC):
             self.logger.warning(f"Failed to initialize prices for tracked assets: {e}")
 
     async def _process_initial_balances(self, balance: Balances, total_balances: Dict[str, float]):
-        for asset, total_amount in total_balances.items():
-            avg_buy_price, realised_pnl = await calculate_average_buy_price(self.exchange, asset, Decimal(str(total_amount)), self.quote_currency, self.logger)
-            free_amount = Decimal(str(balance.get('free', {}).get(asset, 0)))
-            locked_amount = Decimal(str(balance.get('used', {}).get(asset, 0)))
-            self.balances_cache[asset] = {
-                'free': free_amount,
-                'locked': locked_amount,
-                'total_amount': free_amount + locked_amount,
-                'price': Decimal('1.0') if asset == self.quote_currency else Decimal('0'),
-                'avg_buy_price': avg_buy_price,
-                'realised_pnl': realised_pnl
-            }
-            self.logger.info(f"Asset: {asset}, Avg Buy Price: {avg_buy_price if avg_buy_price is not None else 'N/A'}, Realised PnL: {realised_pnl}")
+        async def process_single_asset(asset: str, total_amount: float) -> None:
+            """단일 자산의 평균 가격 계산 및 결과 처리"""
+            try:
+                avg_buy_price, realised_pnl = await calculate_average_buy_price(
+                    self.exchange,
+                    asset,
+                    Decimal(str(total_amount)),
+                    self.quote_currency,
+                    self.logger
+                )
+
+                free_amount = Decimal(str(balance.get('free', {}).get(asset, 0)))
+                locked_amount = Decimal(str(balance.get('used', {}).get(asset, 0)))
+
+                self.balances_cache[asset] = {
+                    'free': free_amount,
+                    'locked': locked_amount,
+                    'total_amount': free_amount + locked_amount,
+                    'price': Decimal('1.0') if asset == self.quote_currency else Decimal('0'),
+                    'avg_buy_price': avg_buy_price,
+                    'realised_pnl': realised_pnl
+                }
+
+                # 각 자산 계산 완료 즉시 로그 출력 🎯
+                self.logger.info(f"Asset: {asset}, Avg Buy Price: {avg_buy_price if avg_buy_price is not None else 'N/A'}, Realised PnL: {realised_pnl}")
+
+            except Exception as e:
+                self.logger.error(f"Error calculating avg price for {asset}: {e}")
+
+        # 모든 자산을 병렬로 처리 (계산 완료 시점에 로그 출력)
+        async with asyncio.TaskGroup() as tg:
+            for asset, total_amount in total_balances.items():
+                tg.create_task(process_single_asset(asset, total_amount))
 
     @abstractmethod
     async def connect_price_ws(self) -> None:
