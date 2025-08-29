@@ -13,6 +13,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let exchanges = [];
     let activeExchange = '';
     let followCoins = {};  // follow 코인 캐시: {exchange: Set(coins)}
+    let valueFormats = {};  // value 소수점 포맷: {exchange: integer}
 
     const modal = document.getElementById("details-modal");
     const closeButton = document.querySelector(".close-button");
@@ -54,6 +55,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     const { exchange, follows } = data;
                     followCoins[exchange] = new Set(follows);
                     console.log(`Received follow coins for ${exchange}:`, follows);
+                } else if (data.type === 'value_format') {
+                    const { exchange, value_decimal_places } = data;
+                    valueFormats[exchange] = value_decimal_places;
+                    console.log(`Received value format for ${exchange}:`, value_decimal_places);
                 } else if (data.type === 'balance_update') {
                     updateCryptoCard(data);
                 } else if (data.type === 'remove_holding') {
@@ -295,7 +300,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 totalValue += parseFloat(el.querySelector('.value').dataset.value || 0);
             }
         });
-        totalValueElement.textContent = `${totalValue.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`;
+        // 활성 거래소의 소수점 형식을 사용하여 내 가치 표시
+        const decimalPlaces = valueFormats[activeExchange] ?? 3;
+        totalValueElement.textContent = `${totalValue.toLocaleString('en-US', {
+            minimumFractionDigits: decimalPlaces,
+            maximumFractionDigits: decimalPlaces
+        })}`;
         updateShares();
     }
 
@@ -484,6 +494,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const unfilledValue = (amount - filled) * price;
 
+        // 주문 카드의 value 표시를 위한 decimal places
+        const orderDecimalPlaces = valueFormats[quoteCurrency.toLowerCase()] ?? 3;
+
         return `
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <h2 style="margin: 0; flex-grow: 1; text-align: center;">${baseSymbol}</h2>
@@ -514,7 +527,7 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="info-row">
                 <span class="info-label">Value:</span>
-                <span class="info-value">${unfilledValue.toFixed(3)}</span>
+                <span class="info-value">${unfilledValue.toFixed(orderDecimalPlaces)}</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Date:</span>
@@ -525,10 +538,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function createCryptoCardHTML(data) {
         const symbol = data.symbol || 'Unknown';
+        const exchange = data.exchange;
         const price = Number.isFinite(parseFloat(data.price)) ? parseFloat(data.price) : 0;
         const free = Number.isFinite(parseFloat(data.free)) ? parseFloat(data.free) : 0;
         const locked = Number.isFinite(parseFloat(data.locked)) ? parseFloat(data.locked) : 0;
         const value = Number.isFinite(parseFloat(data.value)) ? parseFloat(data.value) : 0;
+
+        // 거래소별 소수점 자리수 가져오기 (기본값은 3)
+        const decimalPlaces = valueFormats[exchange] ?? 3;
         
         const totalAmount = free + locked;
         const lockedAmountHtml = locked > 1e-8 ? `<p class="locked">Locked: ${parseFloat(locked.toFixed(8))}</p>` : '';
@@ -576,9 +593,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 <span class="info-value">${parseFloat(price.toPrecision(8))}${priceChangeSpan}</span>
             </div>
             ${avgBuyPriceHtml}
-            <div class="info-row value" data-value="${value.toFixed(3)}">
+            <div class="info-row value" data-value="${value.toFixed(decimalPlaces)}">
                 <span class="info-label">Value:</span>
-                <span class="info-value">${value.toFixed(3)}</span>
+                <span class="info-value">${value.toFixed(decimalPlaces)}</span>
             </div>
             <div class="info-row share">
                 <span class="info-label">Share:</span>
@@ -600,13 +617,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const balanceDetailsContainer = document.getElementById("modal-crypto-balance-details");
 
-        const formatPnl = (pnl) => {
+        const formatPnl = (pnl, exchange) => {
             if (isNaN(pnl)) {
                 return '<span class="info-value profit-neutral">-</span>';
             }
             const pnlClass = pnl >= 0 ? 'profit-positive' : 'profit-negative';
             const pnlSign = pnl > 0 ? '+' : '';
-            return `<span class="info-value ${pnlClass}">${pnlSign}${pnl.toFixed(3)}</span>`;
+            const decimalPlaces = valueFormats[exchange] ?? 3;
+            return `<span class="info-value ${pnlClass}">${pnlSign}${pnl.toFixed(decimalPlaces)}</span>`;
         };
 
         balanceDetailsContainer.innerHTML = `
@@ -616,11 +634,11 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="info-row">
                 <span class="info-label">Unrealised PnL:</span>
-                ${formatPnl(unrealised_pnl)}
+                ${formatPnl(unrealised_pnl, exchange)}
             </div>
             <div class="info-row">
                 <span class="info-label">Realised PnL:</span>
-                ${formatPnl(realised_pnl)}
+                ${formatPnl(realised_pnl, exchange)}
             </div>
         `;
 
@@ -655,7 +673,8 @@ document.addEventListener("DOMContentLoaded", () => {
                             const unrealised_pnl = (price - avg_buy_price) * totalAmount;
                             const pnlElement = modal.querySelector("#modal-crypto-balance-details .info-row:nth-child(2) .info-value");
                             if (pnlElement) {
-                                pnlElement.textContent = (unrealised_pnl > 0 ? '+' : '') + unrealised_pnl.toFixed(3);
+                                const decimalPlaces = valueFormats[exchange] ?? 3;
+                                pnlElement.textContent = (unrealised_pnl > 0 ? '+' : '') + unrealised_pnl.toFixed(decimalPlaces);
                                 pnlElement.className = `info-value ${unrealised_pnl >= 0 ? 'profit-positive' : 'profit-negative'}`;
                             }
                         }

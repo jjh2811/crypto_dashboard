@@ -6,6 +6,7 @@
       "price_ws_url": "wss://stream.binance.com:9443/ws",
       "user_data_ws_url": "wss://ws-api.binance.com:443/ws-api/v3",
       "quote_currency": "USDT",
+      "value_decimal_places": 3,
       "follows": ["BTC", "ETH", "SOL"],
       "testnet": {
         "use": false,
@@ -18,6 +19,7 @@
       "price_ws_url": "wss://api.upbit.com/websocket/v1",
       "user_data_ws_url": "wss://api.upbit.com/websocket/v1/private",
       "quote_currency": "KRW",
+      "value_decimal_places": 0,
       "follows": ["BTC"]
     }
   },

@@ -163,13 +163,23 @@ async def handle_websocket(request):
             })
 
         for exchange in app['exchanges'].values():
-            # 초기에 follow 코인 목록 전송
+            # 초기에 follow 코인 목록 및 포맷 설정 전송
             follow_message = {
                 'type': 'follow_coins',
                 'exchange': exchange.name,
                 'follows': exchange.follows
             }
             await ws.send_json(follow_message)
+
+            # value_decimal_places 설정 전송
+            exchanges_config = app.get('config', {}).get('exchanges', {})
+            decimal_places = exchanges_config.get(exchange.name.lower(), {}).get('value_decimal_places', 3)
+            format_message = {
+                'type': 'value_format',
+                'exchange': exchange.name,
+                'value_decimal_places': decimal_places
+            }
+            await ws.send_json(format_message)
 
             for symbol, data in exchange.balances_cache.items():
                 update_message = exchange.create_balance_update_message(symbol, data)
@@ -314,6 +324,9 @@ async def on_startup(app):
     config_path = os.path.join(os.path.dirname(__file__), 'config.json')
     with open(config_path) as f:
         config = json.load(f)
+
+    # app에 config 저장하여 다른 핸들러에서도 사용 가능하게 함
+    app['config'] = config
 
     secrets_path = os.path.join(os.path.dirname(__file__), 'secrets.json')
     with open(secrets_path) as f:
