@@ -52,7 +52,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 } else if (data.type === 'balance_update') {
                     updateCryptoCard(data);
                 } else if (data.type === 'remove_holding') {
-                    const card = document.getElementById(data.symbol);
+                    const uniqueId = `${data.exchange}_${data.symbol}`;
+                    const card = document.getElementById(uniqueId);
                     if (card) {
                         card.remove();
                         updateTotalValue();
@@ -242,12 +243,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function updateCryptoCard(data) {
         const { symbol, price, exchange } = data;
+        const uniqueId = `${exchange}_${symbol}`;
         currentPrices[symbol] = parseFloat(price);
-        let card = document.getElementById(symbol);
+        let card = document.getElementById(uniqueId);
 
         if (!card) {
             card = document.createElement("div");
-            card.id = symbol;
+            card.id = uniqueId;
             card.className = "crypto-card";
             cryptoContainer.appendChild(card);
         }

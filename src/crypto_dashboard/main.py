@@ -179,6 +179,7 @@ async def handle_websocket(request):
                 except ConnectionResetError:
                     logger.warning(f"Failed to send initial 'orders_update' to a newly connected client for {exchange.name}.")
 
+
         if log_cache:
             for log_msg in log_cache:
                 try:

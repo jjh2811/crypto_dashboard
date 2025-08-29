@@ -3,7 +3,7 @@ import base64
 from decimal import Decimal
 import json
 import time
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, List, Set, cast
 
 from aiohttp import web
 from ccxt.async_support import binance
@@ -223,9 +223,8 @@ class BinanceExchange(ExchangeBase):
                                         await self.update_subscriptions_if_needed()
 
                                 elif not is_positive_total and is_existing:
-                                    self.logger.info(f"Asset sold out or zeroed: {asset}")
-                                    del self.balances_cache[asset]
-                                    await self.app['broadcast_message']({'type': 'remove_holding', 'symbol': asset})
+                                    # 공통 로직으로 잔고 0 처리
+                                    self._handle_zero_balance(asset, is_existing)
                                     await self.update_subscriptions_if_needed()
 
                         elif event_type == 'executionReport':
@@ -339,6 +338,10 @@ class BinanceExchange(ExchangeBase):
                 self.userdata_ws = None
                 await asyncio.sleep(5)
 
+    def _get_order_asset_names(self) -> Set[str]:
+        """바이낸스 주문에서 자산 이름 추출"""
+        return {order.get('symbol', '').replace(self.quote_currency, '').replace('/', '') for order in self.orders_cache.values()}
+
     async def update_subscriptions_if_needed(self) -> None:
         lock = self.app.get('subscription_lock')
         if not lock:
@@ -361,7 +364,7 @@ class BinanceExchange(ExchangeBase):
                 self.logger.info(f"Sent {method} for: {streams} with ID: {request_id}")
 
             holding_assets = set(self.balances_cache.keys())
-            order_assets = {order.get('symbol', '').replace(self.quote_currency, '').replace('/', '') for order in self.orders_cache.values()}
+            order_assets = self._get_order_asset_names()
             required_assets = (holding_assets | order_assets)
 
             to_add = required_assets - self.tracked_assets

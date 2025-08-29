@@ -4,7 +4,7 @@ from decimal import Decimal
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Set, cast
 
 from aiohttp import web
 from websockets.legacy.client import WebSocketClientProtocol
@@ -25,6 +25,7 @@ class ExchangeBase(ABC):
 
         exchange_config = self.config['exchanges'][self.name.lower()]
         self.quote_currency = exchange_config.get('quote_currency')
+        self.favorites = exchange_config.get('favorites', [])
 
         self._exchange = self._create_exchange_instance(api_key, secret_key, exchange_config)
 
@@ -151,7 +152,24 @@ class ExchangeBase(ABC):
 
         holding_assets = set(self.balances_cache.keys())
         order_assets = {o['symbol'].replace(self.quote_currency, '').replace('/', '') for o in self.orders_cache.values() if o.get('symbol')}
-        self.tracked_assets = holding_assets | order_assets
+        favorite_assets = set(self.favorites)
+        self.tracked_assets = holding_assets | order_assets | favorite_assets
+
+        # Track favorite_assets for price monitoring
+
+        # favorites 코인을 위한 dummy balance 데이터 추가
+        for asset in favorite_assets:
+            if asset not in self.balances_cache:
+                self.balances_cache[asset] = {
+                    'free': Decimal('0'),
+                    'locked': Decimal('0'),
+                    'total_amount': Decimal('0'),
+                    'price': Decimal('0'),
+                    'avg_buy_price': None,
+                    'realised_pnl': None
+                }
+                self.logger.info(f"[{self.name}] Added dummy balance for favorite: {asset}")
+
 
         # 주문이 있는 코인들의 가격도 초기화 (동기적으로 실행)
         try:
@@ -282,9 +300,48 @@ class ExchangeBase(ABC):
                     # If asset not in balances_cache, still broadcast price update
                     update_message = {'symbol': asset, 'price': float(current_price)}
                     await self.app['broadcast_message'](update_message)
-                self.logger.info(f"Fetched current price for {asset}: {current_price}")
+                self.logger.debug(f"Fetched current price for {asset}: {current_price}")
         except Exception as e:
             self.logger.warning(f"Failed to fetch current price for {symbol}: {e}")
+
+    def _handle_zero_balance(self, asset: str, is_existing: bool) -> None:
+        """잔고가 0인 코인을 처리하는 공통 로직"""
+        if not is_existing:
+            return
+
+        order_assets = self._get_order_asset_names()
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        # 캐시 업데이트
+        if asset in self.tracked_assets or asset in order_assets:
+            # 잔고만 0으로 설정
+            self.balances_cache[asset]['free'] = Decimal('0')
+            self.balances_cache[asset]['locked'] = Decimal('0')
+            self.balances_cache[asset]['total_amount'] = Decimal('0')
+            self.logger.info(f"Asset zeroed but kept for tracking: {asset}")
+
+            # 메시지 전송 (async)
+            if loop is not None:
+                update_message = self.create_balance_update_message(asset, self.balances_cache[asset])
+                asyncio.create_task(self.app['broadcast_message'](update_message))
+
+        else:
+            # 완전 삭제
+            del self.balances_cache[asset]
+            self.logger.info(f"Asset completely removed: {asset}")
+
+            # 제거 메시지 전송 (async)
+            if loop is not None:
+                remove_message = {'type': 'remove_holding', 'symbol': asset, 'exchange': self.name}
+                asyncio.create_task(self.app['broadcast_message'](remove_message))
+
+    def _get_order_asset_names(self) -> Set[str]:
+        """주문에서 자산 이름들을 추출 (자식 클래스에서 구현)"""
+        raise NotImplementedError("거래소별 주문 자산 추출 로직을 구현해야 합니다")
 
     async def close(self) -> None:
         await self.exchange.close()

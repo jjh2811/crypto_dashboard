@@ -1,7 +1,7 @@
 import asyncio
 from decimal import Decimal
 import json
-from typing import Any, Dict, cast
+from typing import Any, Dict, Set, cast
 import uuid
 
 from ccxt.async_support import upbit
@@ -72,7 +72,6 @@ class UpbitExchange(ExchangeBase):
                                 continue
                             message_text = message.decode('utf-8') if isinstance(message, bytes) else message
                             data = json.loads(message_text)
-                            self.logger.info(f"Received data from Upbit price ws: {data}")
 
                             # 데이터가 딕셔너리인 경우에만 기존 로직을 실행하도록 수정
                             if isinstance(data, dict) and data.get('ty') == 'ticker':
@@ -173,9 +172,8 @@ class UpbitExchange(ExchangeBase):
                                             await self.update_subscriptions_if_needed()
 
                                     elif not is_positive_total and is_existing:
-                                        self.logger.info(f"Asset sold out or zeroed: {asset}")
-                                        del self.balances_cache[asset]
-                                        await self.app['broadcast_message']({'type': 'remove_holding', 'symbol': asset})
+                                        # 공통 로직으로 잔고 0 처리
+                                        self._handle_zero_balance(asset, is_existing)
                                         await self.update_subscriptions_if_needed()
 
                             elif event_type == 'myOrder':
@@ -264,20 +262,34 @@ class UpbitExchange(ExchangeBase):
                 self.userdata_ws = None
                 await asyncio.sleep(5)
 
+    def _get_order_asset_names(self) -> Set[str]:
+        """업비트 주문에서 자산 이름 추출"""
+        return {o['symbol'].split('/')[0] for o in self.orders_cache.values() if o.get('symbol')}
+
     async def update_subscriptions_if_needed(self) -> None:
         lock = self.app.get('subscription_lock')
         if not lock:
             return
 
         async with lock:
+            websocket = self.price_ws
+            if not websocket or websocket.state != State.OPEN:
+                return
+
+            # 공통 추출 로직 사용 (favorites 포함)
             holding_assets = set(self.balances_cache.keys())
-            order_assets = {o['symbol'].split('/')[0] for o in self.orders_cache.values() if o.get('symbol')}
+            order_assets = self._get_order_asset_names()
             required_assets = (holding_assets | order_assets)
 
-            if required_assets != self.tracked_assets:
-                self.logger.info(f"Subscription update required. Old: {self.tracked_assets}, New: {required_assets}")
-                self.tracked_assets = required_assets
+            # 바이낸스 스타일 증분 관리 적용
+            previous_tracked = self.tracked_assets.copy()
 
-                websocket = self.price_ws
-                if websocket and websocket.state == State.OPEN:
-                    await self._send_price_subscription(websocket)
+            # 추가할 자산과 제거할 자산 계산
+            to_add = required_assets - previous_tracked
+            to_remove = previous_tracked - required_assets
+
+            # 변경사항이 있으면 전체 구독 업데이트 (업비트의 방식)
+            if to_add or to_remove:
+                self.tracked_assets = required_assets
+                await self._send_price_subscription(websocket)
+                self.logger.info(f"Upbit subscription updated - Added: {to_add}, Removed: {to_remove}")
