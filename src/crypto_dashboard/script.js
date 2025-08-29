@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let cachedLogs = [];
     let exchanges = [];
     let activeExchange = '';
+    let followCoins = {};  // follow 코인 캐시: {exchange: Set(coins)}
 
     const modal = document.getElementById("details-modal");
     const closeButton = document.querySelector(".close-button");
@@ -49,6 +50,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (exchanges.length > 0) {
                         setActiveExchange(exchanges[0]);
                     }
+                } else if (data.type === 'follow_coins') {
+                    const { exchange, follows } = data;
+                    followCoins[exchange] = new Set(follows);
+                    console.log(`Received follow coins for ${exchange}:`, follows);
                 } else if (data.type === 'balance_update') {
                     updateCryptoCard(data);
                 } else if (data.type === 'remove_holding') {
@@ -257,6 +262,13 @@ document.addEventListener("DOMContentLoaded", () => {
         Object.keys(data).forEach(key => {
             card.dataset[key] = data[key];
         });
+
+        // Follow 코인에 대한 스타일 적용 (캐시된 정보 활용)
+        const totalAmount = parseFloat(card.dataset.free || 0) + parseFloat(card.dataset.locked || 0);
+        const isZeroBalance = totalAmount === 0;
+        const is_follow = followCoins[exchange]?.has(symbol) || false;
+
+        card.classList.toggle('follow-zero-balance', is_follow && isZeroBalance);
 
         card.innerHTML = createCryptoCardHTML(data);
         if (activeExchange && card.dataset.exchange !== activeExchange) {

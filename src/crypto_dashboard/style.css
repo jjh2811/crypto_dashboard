@@ -200,6 +200,25 @@ body {
     float: left;
 }
 
+/* Follow 코인 스타일 - 잔고가 없는 경우 회색 스타일 적용 */
+.crypto-card.follow-zero-balance {
+    background-color: #f8f8f8;
+    border: 1px solid #ccc;
+    opacity: 0.6;
+}
+
+.crypto-card.follow-zero-balance h2 {
+    color: #999;
+}
+
+.crypto-card.follow-zero-balance .info-value {
+    color: #666;
+}
+
+.crypto-card.follow-zero-balance .value .info-value {
+    color: #999;
+}
+
 /* Command Bar Styles */
 #command-bar {
     position: fixed;

@@ -163,6 +163,14 @@ async def handle_websocket(request):
             })
 
         for exchange in app['exchanges'].values():
+            # 초기에 follow 코인 목록 전송
+            follow_message = {
+                'type': 'follow_coins',
+                'exchange': exchange.name,
+                'follows': exchange.follows
+            }
+            await ws.send_json(follow_message)
+
             for symbol, data in exchange.balances_cache.items():
                 update_message = exchange.create_balance_update_message(symbol, data)
                 await ws.send_json(update_message)
