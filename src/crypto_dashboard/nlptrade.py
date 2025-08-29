@@ -714,5 +714,4 @@ class TradeExecutor:
             }
 
         except Exception as e:
-            self.logger.error(f"An unexpected error occurred: {e}", exc_info=True)
             return {"status": "error", "message": f"An unexpected error occurred: {e}"}

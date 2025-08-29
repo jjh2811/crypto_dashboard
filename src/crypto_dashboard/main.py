@@ -264,6 +264,12 @@ async def handle_websocket(request):
                             trade_command = TradeCommand(**command_data)
                             logger.info(f"Executing NLP command: {trade_command}")
                             result = await exchange.executor.execute(trade_command)
+
+                            # 실행 결과 확인 후 에러 시 프론트엔드로 전송 ✨
+                            if result.get('status') == 'error':
+                                error_message = result.get('message', '거래 실행 중 알 수 없는 에러가 발생했습니다.')
+                                await ws.send_json({'type': 'nlp_error', 'message': f'[{exchange_name.upper()}] {error_message}'})
+
                             await broadcast_log(result, exchange.name, exchange.logger)
                         else:
                             logger.error("No command data received for nlp_execute")
