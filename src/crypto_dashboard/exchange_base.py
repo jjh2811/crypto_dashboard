@@ -25,7 +25,7 @@ class ExchangeBase(ABC):
 
         exchange_config = self.config['exchanges'][self.name.lower()]
         self.quote_currency = exchange_config.get('quote_currency')
-        self.favorites = exchange_config.get('favorites', [])
+        self.follows = exchange_config.get('follows', [])
 
         self._exchange = self._create_exchange_instance(api_key, secret_key, exchange_config)
 
@@ -152,13 +152,13 @@ class ExchangeBase(ABC):
 
         holding_assets = set(self.balances_cache.keys())
         order_assets = {o['symbol'].replace(self.quote_currency, '').replace('/', '') for o in self.orders_cache.values() if o.get('symbol')}
-        favorite_assets = set(self.favorites)
-        self.tracked_assets = holding_assets | order_assets | favorite_assets
+        follow_assets = set(self.follows)
+        self.tracked_assets = holding_assets | order_assets | follow_assets
 
         # Track favorite_assets for price monitoring
 
-        # favorites 코인을 위한 dummy balance 데이터 추가
-        for asset in favorite_assets:
+        # follows 코인을 위한 dummy balance 데이터 추가
+        for asset in follow_assets:
             if asset not in self.balances_cache:
                 self.balances_cache[asset] = {
                     'free': Decimal('0'),
@@ -168,7 +168,7 @@ class ExchangeBase(ABC):
                     'avg_buy_price': None,
                     'realised_pnl': None
                 }
-                self.logger.info(f"[{self.name}] Added dummy balance for favorite: {asset}")
+                self.logger.info(f"[{self.name}] Added dummy balance for follow: {asset}")
 
 
         # 주문이 있는 코인들의 가격도 초기화 (동기적으로 실행)

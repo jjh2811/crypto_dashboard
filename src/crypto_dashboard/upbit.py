@@ -276,7 +276,7 @@ class UpbitExchange(ExchangeBase):
             if not websocket or websocket.state != State.OPEN:
                 return
 
-            # 공통 추출 로직 사용 (favorites 포함)
+            # 공통 추출 로직 사용 (follows 포함)
             holding_assets = set(self.balances_cache.keys())
             order_assets = self._get_order_asset_names()
             required_assets = (holding_assets | order_assets)
