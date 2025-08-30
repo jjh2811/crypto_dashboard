@@ -33,7 +33,6 @@ class EntityExtractor:
             self.max_coin_len = max(len(c) for c in self.coins) if self.coins else 12
         else:
             self.max_coin_len = 12  # 기본값
-        self.logger.info(f"EntityExtractor: 코인 심볼 최대 길이 인식 수치가 {self.max_coin_len}(으)로 설정되었습니다.")
 
     def find_closest_symbol(self, input_symbol: str) -> Optional[str]:
         """입력된 심볼과 가장 유사한 심볼을 찾음"""
