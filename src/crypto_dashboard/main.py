@@ -1,337 +1,40 @@
-import asyncio
-from dataclasses import asdict
-from datetime import datetime, timezone
+"""
+간소화된 메인 모듈
+서버 부트스트랩 및 라우팅만 담당합니다.
+"""
 import json
 import logging
 import os
-import secrets
 
 from aiohttp import web
 
-from .exchange_coordinator import ExchangeCoordinator
-from .models.trade_models import TradeCommand
-
-SECRET_TOKEN = secrets.token_hex(32)
-
-
-# 로깅 설정
-log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-# 콘솔 핸들러
-stream_handler = logging.StreamHandler()
-stream_handler.setFormatter(log_formatter)
-logger.addHandler(stream_handler)
-
-clients = set()
-log_cache = []
-
-MAX_LOGIN_ATTEMPTS = 5
-LOGIN_LOCKOUT_TIME = 600  # 10 minutes
-login_attempts = {}
-last_login_attempt = {}
-
-async def broadcast_message(message):
-    """모든 연결된 클라이언트에게 메시지를 전송합니다."""
-    for ws in list(clients):
-        try:
-            await ws.send_json(message)
-        except ConnectionResetError:
-            logger.warning(f"Failed to send message to a disconnected client.")
-
-async def broadcast_orders_update(exchange):
-    """모든 클라이언트에게 현재 주문 목록을 전송합니다."""
-    orders_with_exchange = []
-    for order in exchange.order_manager.orders_cache.values():
-        order_copy = order.copy()
-        order_copy['exchange'] = exchange.name
-        orders_with_exchange.append(order_copy)
-    update_message = {'type': 'orders_update', 'data': orders_with_exchange}
-    await broadcast_message(update_message)
-
-async def broadcast_log(message, exchange_name=None, exchange_logger=None):
-    """모든 클라이언트에게 로그 메시지를 전송합니다."""
-    log_message = {
-        'type': 'log',
-        'message': message,
-        'timestamp': datetime.now(timezone.utc).isoformat(),
-        'exchange': exchange_name
-    }
-    log_cache.append(log_message)
-
-    # Use exchange-specific logger if available, otherwise use root logger
-    log_logger = exchange_logger if exchange_logger else logger
-    log_logger.info(f"LOG: {message}")
-
-    await broadcast_message(log_message)
-
-async def login(request):
-    """POST 요청 + 비밀번호 입력 후 쿠키 발급"""
-    ip_address = request.transport.get_extra_info('peername')[0]
-    current_time = datetime.now(timezone.utc).timestamp()
-    error_message = ""
-    button_disabled = ""
-
-    login_path = os.path.join(os.path.dirname(__file__), 'frontend', 'login.html')
-    try:
-        with open(login_path, 'r') as f:
-            login_html = f.read()
-    except FileNotFoundError:
-        return web.Response(text="Login page not found.", status=404)
-
-    if ip_address in last_login_attempt and current_time - last_login_attempt[ip_address] < LOGIN_LOCKOUT_TIME:
-        if login_attempts.get(ip_address, 0) >= MAX_LOGIN_ATTEMPTS:
-            error_message = "너무 많은 로그인 시도를 했습니다. 잠시 후 다시 시도하세요."
-            button_disabled = "disabled"
-            return web.Response(text=login_html.replace("{{error_message}}", error_message).replace("{{button_disabled}}", button_disabled), status=429, content_type='text/html')
-
-    if request.method == "POST":
-        data = await request.post()
-        password = data.get("password", "")
-        if password != request.app['login_password']:
-            login_attempts[ip_address] = login_attempts.get(ip_address, 0) + 1
-            last_login_attempt[ip_address] = current_time
-            if login_attempts[ip_address] >= MAX_LOGIN_ATTEMPTS:
-                error_message = "너무 많은 로그인 시도를 했습니다. 잠시 후 다시 시도하세요."
-                button_disabled = "disabled"
-                return web.Response(text=login_html.replace("{{error_message}}", error_message).replace("{{button_disabled}}", button_disabled), status=429, content_type='text/html')
-            else:
-                error_message = "비밀번호가 틀렸습니다."
-                return web.Response(text=login_html.replace("{{error_message}}", error_message).replace("{{button_disabled}}", ""), status=401, content_type='text/html')
-
-        login_attempts.pop(ip_address, None)
-        last_login_attempt.pop(ip_address, None)
-
-        resp = web.HTTPFound('/')
-        resp.set_cookie(
-            "auth_token",
-            SECRET_TOKEN,
-            httponly=True,
-            secure=True,
-            samesite="Strict",
-            max_age=86400
-        )
-        return resp
-
-    # GET request
-    return web.Response(text=login_html.replace("{{error_message}}", "").replace("{{button_disabled}}", ""), status=200, content_type='text/html')
-
-async def logout(request):
-    """쿠키 삭제로 로그아웃"""
-    resp = web.HTTPFound('/login')
-    resp.del_cookie("auth_token")
-    return resp
-
-@web.middleware
-async def auth_middleware(request, handler):
-    # 로그인/로그아웃 페이지 및 정적 파일은 예외
-    if request.path in ("/login", "/logout", "/style.css", "/script.js"):
-        return await handler(request)
-
-    token = request.cookies.get("auth_token")
-    if token != SECRET_TOKEN:
-        return web.HTTPFound('/login')
-    return await handler(request)
+from .utils.auth import auth_middleware, get_secret_token
+from .utils.web_handlers import handle_websocket, http_handler
+from .utils.server_lifecycle import on_startup, on_shutdown, on_cleanup
+from .utils.broadcast import basic_broadcast_message, basic_broadcast_orders_update, basic_broadcast_log
 
 
-async def handle_websocket(request):
-    app = request.app
-    token = request.cookies.get("auth_token")
-    if token != SECRET_TOKEN:
-        ws = web.WebSocketResponse(heartbeat=25)
-        await ws.prepare(request)
-        await ws.close(code=1008, message=b'Authentication failed')
-        return ws
+def init_app():
+    """애플리케이션 초기화"""
+    # 로깅 설정
+    log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
 
-    ws = web.WebSocketResponse(heartbeat=25)
-    await ws.prepare(request)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(log_formatter)
+    logger.addHandler(stream_handler)
 
-    logger.info('Client connected.')
-    clients.add(ws)
-    logger.info(f"Total clients: {len(clients)}")
+    print("DEBUG: init_app started")
+    print(f"DEBUG: log level: {logging.getLogger().level}")
 
-    try:
-        exchange_names = list(app['exchanges'].keys())
-        await ws.send_json({'type': 'exchanges_list', 'data': exchange_names})
+    # 앱 생성
+    app = web.Application(middlewares=[auth_middleware])
+    app.on_startup.append(on_startup)
+    app.on_shutdown.append(on_shutdown)
+    app.on_cleanup.append(on_cleanup)
 
-        if app['reference_prices'] and app['reference_time']:
-            await ws.send_json({
-                'type': 'reference_price_info',
-                'time': app['reference_time'],
-                'prices': app['reference_prices']
-            })
-
-        for exchange in app['exchanges'].values():
-            # 초기에 follow 코인 목록 및 포맷 설정 전송
-            follow_message = {
-                'type': 'follow_coins',
-                'exchange': exchange.name,
-                'follows': exchange.follows
-            }
-            await ws.send_json(follow_message)
-
-            # value_decimal_places 설정 전송
-            exchanges_config = app.get('config', {}).get('exchanges', {})
-            decimal_places = exchanges_config.get(exchange.name.lower(), {}).get('value_decimal_places', 3)
-            format_message = {
-                'type': 'value_format',
-                'exchange': exchange.name,
-                'value_decimal_places': decimal_places
-            }
-            await ws.send_json(format_message)
-
-            for symbol, data in exchange.balance_manager.balances_cache.items():
-                update_message = exchange.create_balance_update_message(symbol, data)
-                await ws.send_json(update_message)
-
-            if exchange.order_manager.orders_cache:
-                orders_with_exchange = []
-                for order in exchange.order_manager.orders_cache.values():
-                    order_copy = order.copy()
-                    order_copy['exchange'] = exchange.name
-                    orders_with_exchange.append(order_copy)
-                update_message = {'type': 'orders_update', 'data': orders_with_exchange}
-                try:
-                    await ws.send_json(update_message)
-                except ConnectionResetError:
-                    logger.warning(f"Failed to send initial 'orders_update' to a newly connected client for {exchange.name}.")
-
-
-        if log_cache:
-            for log_msg in log_cache:
-                try:
-                    await ws.send_json(log_msg)
-                except ConnectionResetError:
-                    logger.warning("Failed to send cached logs to a newly connected client.")
-                    break
-
-        async for msg in ws:
-            if msg.type == web.WSMsgType.TEXT:
-                try:
-                    data = json.loads(msg.data)
-                    msg_type = data.get('type')
-
-                    exchanges = app.get('exchanges', {})
-                    exchange_name = data.get('exchange')
-
-                    if not exchange_name or exchange_name not in exchanges:
-                        logger.error(f"Invalid exchange specified or no exchanges initialized. Exchange: {exchange_name}")
-                        if msg_type in ('cancel_orders', 'cancel_all_orders', 'nlp_command', 'nlp_execute'):
-                            continue
-
-                    exchange = exchanges.get(exchange_name)
-
-                    if msg_type == 'cancel_orders':
-                        orders_to_cancel = data.get('orders', [])
-                        logger.info(f"Received request to cancel {len(orders_to_cancel)} orders on {exchange.name}.")
-                        for order in orders_to_cancel:
-                            await exchange.cancel_order(order['id'], order['symbol'])
-                        await broadcast_orders_update(exchange)
-
-                    elif msg_type == 'cancel_all_orders':
-                        logger.info(f"Received request to cancel all orders on {exchange.name}.")
-                        await exchange.cancel_all_orders()
-
-                    elif msg_type == 'nlp_command':
-                        text = data.get('text', '')
-                        if not exchange or not exchange.is_nlp_ready():
-                            logger.error(f"NLP not ready for exchange: {exchange_name}")
-                            await ws.send_json({'type': 'nlp_error', 'message': f'{exchange_name}의 자연어 처리기가 준비되지 않았습니다.'})
-                            continue
-                        
-                        result = await exchange.nlp_trade_manager.parse_command(text)
-                        if isinstance(result, TradeCommand):
-                            await ws.send_json({
-                                'type': 'nlp_trade_confirm',
-                                'command': asdict(result)
-                            })
-                        elif isinstance(result, str):
-                            await ws.send_json({'type': 'nlp_error', 'message': result})
-                        else:
-                            await ws.send_json({'type': 'nlp_error', 'message': '명령을 해석하지 못했습니다.'})
-
-                    elif msg_type == 'nlp_execute':
-                        command_data = data.get('command')
-                        if not exchange or not exchange.is_nlp_ready():
-                            logger.error(f"NLP not ready for exchange: {exchange_name}")
-                            await ws.send_json({'type': 'nlp_error', 'message': f'{exchange_name}의 거래 실행기가 준비되지 않았습니다.'})
-                            continue
-
-                        if command_data:
-                            trade_command = TradeCommand(**command_data)
-                            logger.info(f"Executing NLP command: {trade_command}")
-                            result = await exchange.nlp_trade_manager.execute_command(trade_command)
-
-                            # 실행 결과 확인 후 에러 시 프론트엔드로 전송 ✨
-                            if result.get('status') == 'error':
-                                error_message = result.get('message', '거래 실행 중 알 수 없는 에러가 발생했습니다.')
-                                await ws.send_json({'type': 'nlp_error', 'message': f'[{exchange_name.upper()}] {error_message}'})
-
-                            await broadcast_log(result, exchange.name, exchange.logger)
-                        else:
-                            logger.error("No command data received for nlp_execute")
-                            await ws.send_json({'type': 'nlp_error', 'message': '거래 실행 정보가 없습니다.'})
-
-
-                except json.JSONDecodeError:
-                    logger.warning(f"Received non-JSON message: {msg.data}")
-                except Exception as e:
-                    logger.error(f"Error processing websocket message: {e}", exc_info=True)
-
-            elif msg.type == web.WSMsgType.ERROR:
-                logger.error(f'ws connection closed with exception {ws.exception()}')
-    except asyncio.CancelledError:
-        logger.info("Websocket handler cancelled.")
-    finally:
-        clients.discard(ws)
-        logger.info(f"Client disconnected. Total clients: {len(clients)}")
-        if not clients:
-            logger.info("Last client disconnected. Storing current prices as reference.")
-            app['reference_prices'] = {}
-            for exchange_name, exchange in app['exchanges'].items():
-                exchange_reference_prices = {
-                    symbol: float(data['price'])
-                    for symbol, data in exchange.balance_manager.balances_cache.items()
-                    if 'price' in data and symbol != exchange.quote_currency
-                }
-                if exchange_reference_prices:
-                    app['reference_prices'][exchange_name] = exchange_reference_prices
-
-            if app['reference_prices']:
-                app['reference_time'] = datetime.now(timezone.utc).isoformat()
-                logger.info(f"Reference prices saved at {app['reference_time']} for {list(app['reference_prices'].keys())}")
-            else:
-                app['reference_time'] = None
-                logger.info("No assets to track for reference pricing.")
-    return ws
-
-async def http_handler(request):
-    filename = request.match_info.get('filename', 'index.html')
-    filepath = os.path.join(os.path.dirname(__file__), 'frontend', filename)
-    if os.path.exists(filepath):
-        return web.FileResponse(filepath)
-    return web.Response(status=404)
-
-async def on_startup(app):
-    logger.info("Server starting up...")
-    app['log_cache'] = log_cache
-    app['broadcast_message'] = broadcast_message
-    app['broadcast_orders_update'] = broadcast_orders_update
-    app['broadcast_log'] = broadcast_log
-    app['subscription_lock'] = asyncio.Lock()
-    app['exchanges'] = {}
-    app['exchange_tasks'] = []
-    app['reference_prices'] = {}
-    app['reference_time'] = None
-
-    config_path = os.path.join(os.path.dirname(__file__), 'config.json')
-    with open(config_path) as f:
-        config = json.load(f)
-
-    # app에 config 저장하여 다른 핸들러에서도 사용 가능하게 함
-    app['config'] = config
-
+    # 비밀번호 로드
     secrets_path = os.path.join(os.path.dirname(__file__), 'secrets.json')
     with open(secrets_path) as f:
         secrets_data = json.load(f)
@@ -340,105 +43,37 @@ async def on_startup(app):
     if not login_password:
         logger.error("Login password not found in secrets.json under 'login_password' key. Please add it.")
         os._exit(1)
+
     app['login_password'] = login_password
 
-    exchanges_config = config.get('exchanges', {})
-    if not exchanges_config:
-        logger.error("No exchanges configured in config.json")
-        return
+    # 서버 설정 초기화 (모든 초기화 담당)
+    from .utils.server_lifecycle import init_server_config
+    init_server_config(login_password)
 
-    init_tasks = []
-    pending_exchanges = []
+    # 인증 토큰 설정
+    from .utils.auth import get_secret_token
+    app['SECRET_TOKEN'] = get_secret_token()
 
-    for exchange_name, exchange_config in exchanges_config.items():
-        try:
-            logger.info(f"Preparing to initialize exchange: {exchange_name}")
+    # 브로드캐스트 함수들 준비
+    app['broadcast_message'] = basic_broadcast_message
+    app['broadcast_orders_update'] = basic_broadcast_orders_update
+    app['broadcast_log'] = basic_broadcast_log
 
-            api_key_section = f"{exchange_name}_testnet" if exchange_config.get('testnet', {}).get('use', False) else exchange_name
-
-            if api_key_section not in secrets_data.get('exchanges', {}):
-                logger.error(f"API keys for '{api_key_section}' not found in secrets.json")
-                continue
-
-            api_key = secrets_data['exchanges'][api_key_section]['api_key']
-            secret_key = secrets_data['exchanges'][api_key_section]['secret_key']
-
-            if f"YOUR_{api_key_section.upper()}" in api_key or f"YOUR_{api_key_section.upper()}" in secret_key:
-                logger.warning(f"Please replace placeholder keys in secrets.json for {api_key_section}.")
-                continue
-
-            exchange_instance = ExchangeCoordinator(api_key, secret_key, app, exchange_name)
-
-            init_tasks.append(exchange_instance.get_initial_data())
-            pending_exchanges.append(exchange_instance)
-
-        except (FileNotFoundError, KeyError) as e:
-            logger.error(f"Could not prepare {exchange_name} exchange due to missing secrets or config: {e}")
-        except (ModuleNotFoundError, AttributeError) as e:
-            logger.error(f"Could not load exchange module for '{exchange_name}': {e}")
-        except Exception as e:
-            logger.error(f"Error during {exchange_name} exchange preparation: {e}")
-
-    if not init_tasks:
-        logger.warning("No exchanges were prepared for initialization.")
-        return
-
-    logger.info(f"Initializing {len(init_tasks)} exchanges concurrently...")
-    results = await asyncio.gather(*init_tasks, return_exceptions=True)
-
-    for instance, result in zip(pending_exchanges, results):
-        exchange_name = instance.name
-        if isinstance(result, Exception):
-            logger.error(f"Error during {exchange_name} exchange initialization: {result}")
-        else:
-            app['exchanges'][exchange_name] = instance
-            tickers_task = asyncio.create_task(instance.watch_tickers_loop())
-            balance_task = asyncio.create_task(instance.watch_balance_loop())
-            orders_task = asyncio.create_task(instance.watch_orders_loop())
-            app['exchange_tasks'].extend([tickers_task, balance_task, orders_task])
-            logger.info(f"Successfully initialized and connected to {exchange_name}.")
-
-    logger.info("All exchange initializations complete.")
-
-async def on_shutdown(app):
-    logger.info("Shutdown signal received. Closing client connections...")
-    for ws in list(clients):
-        await ws.close(code=1001, message=b'Server shutdown')
-    logger.info(f"All {len(clients)} client connections closed.")
-
-async def on_cleanup(app):
-    logger.info("Cleaning up background tasks...")
-    if 'exchange_tasks' in app:
-        for task in app['exchange_tasks']:
-            if not task.done():
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-
-    if 'exchanges' in app:
-        for exchange_name, exchange in app['exchanges'].items():
-            await exchange.close()
-            logger.info(f"{exchange_name} exchange connection closed.")
-
-    logger.info("All background tasks stopped.")
-
-def init_app():
-    app = web.Application(middlewares=[auth_middleware])
-    app.on_startup.append(on_startup)
-    app.on_shutdown.append(on_shutdown)
-    app.on_cleanup.append(on_cleanup)
-
+    # 라우팅 설정
     app.router.add_get('/ws', handle_websocket)
     app.router.add_get('/', http_handler)
     app.router.add_get('/{filename}', http_handler)
+
+    from .utils.auth import login, logout
     app.router.add_get('/login', login)
     app.router.add_post('/login', login)
     app.router.add_get('/logout', logout)
+
     return app
 
+
 def main():
+    """메인 함수"""
     try:
         with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
             config = json.load(f)
@@ -447,12 +82,13 @@ def main():
     except FileNotFoundError:
         host = 'localhost'
         port = 8000
-        logger.warning("config.json not found, defaulting to host 'localhost' and port 8000")
+        logging.getLogger().warning("config.json not found, defaulting to host 'localhost' and port 8000")
 
     app = init_app()
-    logger.info(f"Attempting to start server on http://{host}:{port}")
+    logging.getLogger().info(f"Attempting to start server on http://{host}:{port}")
     web.run_app(app, host=host, port=port, access_log=None)
-    logger.info("Server shutdown complete.")
+    logging.getLogger().info("Server shutdown complete.")
+
 
 if __name__ == "__main__":
     main()
