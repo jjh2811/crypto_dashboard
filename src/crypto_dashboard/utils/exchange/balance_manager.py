@@ -1,6 +1,6 @@
 import asyncio
 from decimal import Decimal
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional, Set, List
 import logging
 
 from ...protocols import ExchangeProtocol, Balances
@@ -30,6 +30,11 @@ class BalanceManager:
 
         # 평균 가격 계산을 위한 추가 속성들
         self.tracked_assets: Set[str] = set()
+
+        # testnet 설정 로드
+        self.config = app['config'].get('exchanges', {}).get(self.name.lower(), {})
+        self.testnet = 'testnet' in self.config and self.config['testnet'].get('use', False)
+        self.whitelist: List[str] = self.config.get('testnet', {}).get('whitelist', []) if self.testnet else []
 
     def add_follow_asset(self, asset: str) -> None:
         """감시할 자산 추가"""
@@ -78,10 +83,11 @@ class BalanceManager:
             except Exception as e:
                 self.logger.error(f"Error calculating avg price for {asset}: {e}")
 
-        # 모든 자산을 병렬로 처리
+        # 모든 자산을 병렬로 처리 (testnet 시 whitelist로 제한)
         async with asyncio.TaskGroup() as tg:
             for asset, total_amount in total_balances.items():
-                tg.create_task(process_single_asset(asset, total_amount))
+                if not self.testnet or (asset in self.whitelist or asset == self.quote_currency):
+                    tg.create_task(process_single_asset(asset, total_amount))
 
     def create_balance_update_message(self, symbol: str, balance_data: Dict[str, Any]) -> Dict[str, Any]:
         """잔고 정보로부터 클라이언트에게 보낼 업데이트 메시지를 생성합니다."""

@@ -103,9 +103,16 @@ class EventHandler:
         while True:
             try:
                 # price_manager에게 최신 tracked_assets 요청
-                all_tracked = (set(self.balance_manager.balances_cache.keys()) |
-                              set(self.order_manager.get_order_asset_names()) |
-                              self.balance_manager.follows)
+                all_tracked = (
+                    set(self.balance_manager.balances_cache.keys()) |
+                    set(self.order_manager.get_order_asset_names()) |
+                    self.balance_manager.follows
+                )
+
+                # testnet 시 whitelist로 제한
+                if self.testnet:
+                    allowed_assets = set(self.whitelist)
+                    all_tracked &= allowed_assets
 
                 # 업데이트된 자산 목록이 있는 경우 재연결
                 if all_tracked != tracked_assets:

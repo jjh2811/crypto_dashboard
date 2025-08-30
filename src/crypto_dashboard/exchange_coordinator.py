@@ -104,17 +104,28 @@ class ExchangeCoordinator:
 
             await self.balance_manager.process_initial_balances(balance, total_balances)
 
-            # follow 자산들 추가
-            for asset in self.follows:
-                self.balance_manager.add_follow_asset(asset)
+            # follow 자산들 추가 (testnet 시 무시)
+            if not self.testnet:
+                for asset in self.follows:
+                    self.balance_manager.add_follow_asset(asset)
 
             # tracked_assets 업데이트
             self.tracked_assets = (
                 set(self.balance_manager.balances_cache.keys()) |
-                set(self.order_manager.get_order_asset_names()) |
-                self.balance_manager.follows |
-                {self.quote_currency}
+                set(self.order_manager.get_order_asset_names())
             )
+
+            # quote_currency는 항상 포함
+            self.tracked_assets.add(self.quote_currency)
+
+            # follows 추가 (testnet 시 무시)
+            if not self.testnet and self.balance_manager.follows:
+                self.tracked_assets.update(self.balance_manager.follows)
+
+            # testnet 시 whitelist로 제한
+            if self.testnet:
+                allowed_assets = set(self.whitelist + [self.quote_currency])
+                self.tracked_assets &= allowed_assets
 
             # 가격 데이터 초기화
             await self.price_manager.initialize_prices_for_tracked_assets(self.tracked_assets)
