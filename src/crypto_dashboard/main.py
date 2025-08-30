@@ -9,7 +9,7 @@ import secrets
 from aiohttp import web
 
 from .generic_exchange import GenericExchange
-from .nlptrade import TradeCommand, format_trade_command_for_confirmation
+from .nlptrade import TradeCommand
 
 SECRET_TOKEN = secrets.token_hex(32)
 
@@ -242,10 +242,8 @@ async def handle_websocket(request):
                         
                         result = await exchange.parser.parse(text)
                         if isinstance(result, TradeCommand):
-                            confirmation_message = format_trade_command_for_confirmation(result)
                             await ws.send_json({
                                 'type': 'nlp_trade_confirm',
-                                'confirmation_message': confirmation_message,
                                 'command': asdict(result)
                             })
                         elif isinstance(result, str):

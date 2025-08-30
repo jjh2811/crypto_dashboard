@@ -82,12 +82,23 @@ class GenericExchange(ExchangeBase):
         while True:
             try:
                 balance = await self.exchange.watch_balance()
-                for asset, bal in balance.items():
+                total_balances = balance.get('total', {})
+                free_balances = balance.get('free', {})
+                used_balances = balance.get('used', {})
+
+                if not isinstance(total_balances, dict):
+                    self.logger.warning("Total balances not a dict, skipping update")
+                    continue
+
+                for asset, total in total_balances.items():
                     if self.testnet and asset not in self.whitelist:
                         continue
 
-                    free_amount = Decimal(bal.get('free') or '0')
-                    locked_amount = Decimal(bal.get('used') or '0')
+                    free = free_balances.get(asset, '0')
+                    used = used_balances.get(asset, '0')
+
+                    free_amount = Decimal(str(free))
+                    locked_amount = Decimal(str(used))
                     total_amount = free_amount + locked_amount
 
                     is_existing = asset in self.balances_cache
@@ -97,6 +108,8 @@ class GenericExchange(ExchangeBase):
                         if not is_existing:
                             self.logger.info(f"New asset detected: {asset}, free: {free_amount}, locked: {locked_amount}")
                             self.balances_cache[asset] = {'price': Decimal('0')}
+                        else:
+                            self.logger.info(f"Balance update: {asset} free={free_amount} locked={locked_amount}")
 
                         self.balances_cache[asset]['free'] = free_amount
                         self.balances_cache[asset]['locked'] = locked_amount
