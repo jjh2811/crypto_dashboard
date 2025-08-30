@@ -73,7 +73,7 @@ async def login(request):
     error_message = ""
     button_disabled = ""
 
-    login_path = os.path.join(os.path.dirname(__file__), 'login.html')
+    login_path = os.path.join(os.path.dirname(__file__), 'frontend', 'login.html')
     try:
         with open(login_path, 'r') as f:
             login_html = f.read()
@@ -308,7 +308,7 @@ async def handle_websocket(request):
 
 async def http_handler(request):
     filename = request.match_info.get('filename', 'index.html')
-    filepath = os.path.join(os.path.dirname(__file__), filename)
+    filepath = os.path.join(os.path.dirname(__file__), 'frontend', filename)
     if os.path.exists(filepath):
         return web.FileResponse(filepath)
     return web.Response(status=404)

@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Set, cast
 
 from aiohttp import web
 
-from .exchange_utils import calculate_average_buy_price
+from .utils.exchange.exchange_utils import calculate_average_buy_price
 from .nlptrade import EntityExtractor, TradeCommandParser, TradeExecutor
 from .protocols import Balances, ExchangeProtocol
 

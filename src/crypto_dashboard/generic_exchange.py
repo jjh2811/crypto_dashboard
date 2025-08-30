@@ -6,7 +6,7 @@ import ccxt.pro as ccxtpro
 from aiohttp import web
 
 from .exchange_base import ExchangeBase
-from .exchange_utils import calculate_average_buy_price
+from .utils.exchange.exchange_utils import calculate_average_buy_price
 from .protocols import Balances, ExchangeProtocol
 
 
