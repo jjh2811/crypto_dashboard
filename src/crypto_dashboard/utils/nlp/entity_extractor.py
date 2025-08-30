@@ -12,7 +12,7 @@ import unicodedata
 
 from ccxt.base.types import Order
 
-from ..text_utils import clean_text
+from ..text_utils import clean_text, sanitize_input
 
 
 class EntityExtractor:
@@ -324,7 +324,8 @@ class EntityExtractor:
 
     def extract_entities(self, text: str) -> Dict[str, Any]:
         """주어진 텍스트에서 거래 관련 모든 엔터티를 통합 추출"""
-        clean_input = clean_text(text)
+        sanitized_text = sanitize_input(clean_text(text))
+        clean_input = sanitized_text
         self.logger.info(f"Original text: '{text}', Cleaned text: '{clean_input}'")
 
         # 언어 구분

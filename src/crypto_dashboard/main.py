@@ -14,6 +14,22 @@ from .utils.server_lifecycle import on_startup, on_shutdown, on_cleanup
 from .utils.broadcast import basic_broadcast_message, basic_broadcast_orders_update, basic_broadcast_log
 
 
+@web.middleware
+async def csp_middleware(request, handler):
+    """Content Security Policy 헤더 적용"""
+    response = await handler(request)
+    if isinstance(response, web.Response):
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self';"
+        )
+    return response
+
+
 def init_app():
     """애플리케이션 초기화"""
     # 로깅 설정
@@ -26,7 +42,7 @@ def init_app():
     logger = logging.getLogger("main")
 
     # 앱 생성
-    app = web.Application(middlewares=[auth_middleware])
+    app = web.Application(middlewares=[auth_middleware, csp_middleware])
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
     app.on_cleanup.append(on_cleanup)
