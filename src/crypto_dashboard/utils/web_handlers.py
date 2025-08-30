@@ -43,7 +43,7 @@ async def handle_websocket(request):
     await ws.prepare(request)
 
     import logging
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger("web")
     logger.info('Client connected.')
     clients.add(ws)
     logger.info(f"Total clients: {len(clients)}")

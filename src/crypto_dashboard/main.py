@@ -17,16 +17,13 @@ from .utils.broadcast import basic_broadcast_message, basic_broadcast_orders_upd
 def init_app():
     """애플리케이션 초기화"""
     # 로깅 설정
-    log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler()]
+    )
 
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(log_formatter)
-    logger.addHandler(stream_handler)
-
-    print("DEBUG: init_app started")
-    print(f"DEBUG: log level: {logging.getLogger().level}")
+    logger = logging.getLogger("main")
 
     # 앱 생성
     app = web.Application(middlewares=[auth_middleware])
@@ -74,6 +71,7 @@ def init_app():
 
 def main():
     """메인 함수"""
+    logger = logging.getLogger("main")
     try:
         with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
             config = json.load(f)
@@ -82,12 +80,12 @@ def main():
     except FileNotFoundError:
         host = 'localhost'
         port = 8000
-        logging.getLogger().warning("config.json not found, defaulting to host 'localhost' and port 8000")
+        logger.warning("config.json not found, defaulting to host 'localhost' and port 8000")
 
     app = init_app()
-    logging.getLogger().info(f"Attempting to start server on http://{host}:{port}")
+    logger.info(f"Attempting to start server on http://{host}:{port}")
     web.run_app(app, host=host, port=port, access_log=None)
-    logging.getLogger().info("Server shutdown complete.")
+    logger.info("Server shutdown complete.")
 
 
 if __name__ == "__main__":

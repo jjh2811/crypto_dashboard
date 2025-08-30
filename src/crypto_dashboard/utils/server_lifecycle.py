@@ -31,7 +31,7 @@ def init_server_config(login_password: str):
 
 async def on_startup(app):
     """서버 시작 시 초기화 작업"""
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger("server")
     logger.info("Server starting up...")
 
     # 브로드캐스트 함수들 초기화
@@ -119,7 +119,7 @@ async def on_startup(app):
 
 async def on_shutdown(app):
     """서버 종료 시 작업"""
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger("server")
     logger.info("Shutdown signal received. Closing client connections...")
     from .broadcast import get_clients
     clients = get_clients()
@@ -130,7 +130,7 @@ async def on_shutdown(app):
 
 async def on_cleanup(app):
     """정리 작업"""
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger("server")
     logger.info("Cleaning up background tasks...")
     if 'exchange_tasks' in app:
         for task in app['exchange_tasks']:
