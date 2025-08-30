@@ -8,8 +8,8 @@ import secrets
 
 from aiohttp import web
 
-from .generic_exchange import GenericExchange
-from .nlptrade import TradeCommand
+from .exchange_coordinator import ExchangeCoordinator
+from .models.trade_models import TradeCommand
 
 SECRET_TOKEN = secrets.token_hex(32)
 
@@ -43,7 +43,7 @@ async def broadcast_message(message):
 async def broadcast_orders_update(exchange):
     """모든 클라이언트에게 현재 주문 목록을 전송합니다."""
     orders_with_exchange = []
-    for order in exchange.orders_cache.values():
+    for order in exchange.order_manager.orders_cache.values():
         order_copy = order.copy()
         order_copy['exchange'] = exchange.name
         orders_with_exchange.append(order_copy)
@@ -181,13 +181,13 @@ async def handle_websocket(request):
             }
             await ws.send_json(format_message)
 
-            for symbol, data in exchange.balances_cache.items():
+            for symbol, data in exchange.balance_manager.balances_cache.items():
                 update_message = exchange.create_balance_update_message(symbol, data)
                 await ws.send_json(update_message)
 
-            if exchange.orders_cache:
+            if exchange.order_manager.orders_cache:
                 orders_with_exchange = []
-                for order in exchange.orders_cache.values():
+                for order in exchange.order_manager.orders_cache.values():
                     order_copy = order.copy()
                     order_copy['exchange'] = exchange.name
                     orders_with_exchange.append(order_copy)
@@ -235,12 +235,12 @@ async def handle_websocket(request):
 
                     elif msg_type == 'nlp_command':
                         text = data.get('text', '')
-                        if not exchange or not exchange.parser:
-                            logger.error(f"NLP parser not available for exchange: {exchange_name}")
+                        if not exchange or not exchange.is_nlp_ready():
+                            logger.error(f"NLP not ready for exchange: {exchange_name}")
                             await ws.send_json({'type': 'nlp_error', 'message': f'{exchange_name}의 자연어 처리기가 준비되지 않았습니다.'})
                             continue
                         
-                        result = await exchange.parser.parse(text)
+                        result = await exchange.nlp_trade_manager.parse_command(text)
                         if isinstance(result, TradeCommand):
                             await ws.send_json({
                                 'type': 'nlp_trade_confirm',
@@ -253,15 +253,15 @@ async def handle_websocket(request):
 
                     elif msg_type == 'nlp_execute':
                         command_data = data.get('command')
-                        if not exchange or not exchange.executor:
-                            logger.error(f"NLP executor not available for exchange: {exchange_name}")
+                        if not exchange or not exchange.is_nlp_ready():
+                            logger.error(f"NLP not ready for exchange: {exchange_name}")
                             await ws.send_json({'type': 'nlp_error', 'message': f'{exchange_name}의 거래 실행기가 준비되지 않았습니다.'})
                             continue
 
                         if command_data:
                             trade_command = TradeCommand(**command_data)
                             logger.info(f"Executing NLP command: {trade_command}")
-                            result = await exchange.executor.execute(trade_command)
+                            result = await exchange.nlp_trade_manager.execute_command(trade_command)
 
                             # 실행 결과 확인 후 에러 시 프론트엔드로 전송 ✨
                             if result.get('status') == 'error':
@@ -292,7 +292,7 @@ async def handle_websocket(request):
             for exchange_name, exchange in app['exchanges'].items():
                 exchange_reference_prices = {
                     symbol: float(data['price'])
-                    for symbol, data in exchange.balances_cache.items()
+                    for symbol, data in exchange.balance_manager.balances_cache.items()
                     if 'price' in data and symbol != exchange.quote_currency
                 }
                 if exchange_reference_prices:
@@ -367,7 +367,7 @@ async def on_startup(app):
                 logger.warning(f"Please replace placeholder keys in secrets.json for {api_key_section}.")
                 continue
 
-            exchange_instance = GenericExchange(api_key, secret_key, app, exchange_name)
+            exchange_instance = ExchangeCoordinator(api_key, secret_key, app, exchange_name)
 
             init_tasks.append(exchange_instance.get_initial_data())
             pending_exchanges.append(exchange_instance)
