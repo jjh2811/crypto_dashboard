@@ -10,6 +10,7 @@ from dataclasses import asdict
 
 from ..models.trade_models import TradeCommand
 from .broadcast import broadcast_orders_update
+from .text_utils import sanitize_input
 
 
 async def http_handler(request):
@@ -137,7 +138,12 @@ async def handle_websocket(request):
                         await exchange.cancel_all_orders()
 
                     elif msg_type == 'nlp_command':
-                        text = data.get('text', '')
+                        raw_text = data.get('text', '')
+                        text = sanitize_input(raw_text)
+                        if not text:
+                            await ws.send_json({'type': 'nlp_error', 'message': '잘못된 입력입니다.'})
+                            continue
+
                         if not exchange or not exchange.is_nlp_ready():
                             logger.error(f"NLP not ready for exchange: {exchange_name}")
                             await ws.send_json({'type': 'nlp_error', 'message': f'{exchange_name}의 자연어 처리기가 준비되지 않았습니다.'})

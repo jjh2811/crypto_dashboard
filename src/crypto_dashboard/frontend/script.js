@@ -1,4 +1,13 @@
 document.addEventListener("DOMContentLoaded", () => {
+    // 기본적인 HTML 이스케이핑 함수
+    function basicEscape(text) {
+        if (typeof text !== 'string') return text;
+        return text
+            .replace(/&/g, '&')
+            .replace(/</g, '<')
+            .replace(/>/g, '>');
+    }
+
     const cryptoContainer = document.getElementById("crypto-container");
     const totalValueElement = document.getElementById("total-value");
     const ordersContainer = document.getElementById("orders-container");
@@ -208,7 +217,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (event.key === 'Enter') {
             const text = commandInput.value.trim();
             if (text) {
-                if (checkSocketAndSend({ type: 'nlp_command', text: text, exchange: activeExchange })) {
+                if (checkSocketAndSend({ type: 'nlp_command', text: basicEscape(text), exchange: activeExchange })) {
                     commandInput.value = '';
                     commandInput.blur();
                 }
