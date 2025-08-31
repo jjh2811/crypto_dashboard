@@ -1,7 +1,7 @@
 import logging
 from decimal import Decimal
 import json
-import readline # Add this line
+import readline # don't remove this. this is for input()
 from src.crypto_dashboard.utils.nlp.entity_extractor import EntityExtractor
 
 # 기본 로거 설정
