@@ -9,7 +9,6 @@ from aiohttp import web
 from dataclasses import asdict
 
 from ..models.trade_models import TradeCommand
-from .broadcast import broadcast_orders_update
 from .text_utils import sanitize_input
 
 
@@ -131,7 +130,7 @@ async def handle_websocket(request):
                         logger.info(f"Received request to cancel {len(orders_to_cancel)} orders on {exchange.name}.")
                         for order in orders_to_cancel:
                             await exchange.cancel_order(order['id'], order['symbol'])
-                        await broadcast_orders_update(exchange)
+                        await app['broadcast_orders_update'](exchange)
 
                     elif msg_type == 'cancel_all_orders':
                         logger.info(f"Received request to cancel all orders on {exchange.name}.")
@@ -173,8 +172,7 @@ async def handle_websocket(request):
                             result = await exchange.nlp_trade_manager.execute_command(trade_command)
 
                             # 실행 결과 확인 후 에러 시 프론트엔드로 전송
-                            from .broadcast import broadcast_log
-                            await broadcast_log(result, exchange.name, exchange.logger)
+                            await app['broadcast_log'](result, exchange.name, exchange.logger)
 
                             if result.get('status') == 'error':
                                 error_message = result.get('message', '거래 실행 중 알 수 없는 에러가 발생했습니다.')
