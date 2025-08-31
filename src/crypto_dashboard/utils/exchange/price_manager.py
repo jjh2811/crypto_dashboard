@@ -1,33 +1,23 @@
 import asyncio
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 import logging
 
-from ...protocols import ExchangeProtocol
+if TYPE_CHECKING:
+    from ...exchange_coordinator import ExchangeCoordinator
 
 
 class PriceManager:
     """가격 관리를 전담하는 서비스 클래스"""
 
-    def __init__(
-        self,
-        exchange: ExchangeProtocol,
-        logger: logging.Logger,
-        name: str,
-        quote_currency: str,
-        app: Any,
-        balance_manager: Any
-    ):
-        self.exchange = exchange
-        self.logger = logger
-        self.name = name
-        self.quote_currency = quote_currency
-        self.app = app
-        self.balance_manager = balance_manager
-
-        # 가격 캐시들
-        self.order_prices: Dict[str, Decimal] = {}
-        self.ws_id_counter = 1
+    def __init__(self, coordinator: "ExchangeCoordinator"):
+        self.coordinator = coordinator
+        self.exchange = coordinator.exchange
+        self.logger = coordinator.logger
+        self.name = coordinator.name
+        self.quote_currency = coordinator.quote_currency
+        self.app = coordinator.app
+        self.balance_manager = coordinator.balance_manager
 
     async def initialize_prices_for_tracked_assets(self, tracked_assets: set) -> None:
         """추적중인 모든 자산들의 가격 초기화 (배치 조회)"""
@@ -36,90 +26,76 @@ class PriceManager:
             return
 
         symbols = [f"{asset}/{self.quote_currency}" for asset in assets_to_fetch]
+        self.logger.info(f"Fetching initial prices for: {symbols}")
 
         try:
-            # 배치 조회 시도
             tickers = await self.exchange.fetch_tickers(symbols)
             for symbol, ticker in tickers.items():
                 asset = symbol.split('/')[0]
-                await self._update_asset_price(asset, Decimal(str(ticker.get('last', '0'))))
-        except Exception:
-            # 배치 조회 실패 시 개별 조회
+                price = ticker.get('last')
+                if price is not None:
+                    await self._update_asset_price(asset, Decimal(str(price)))
+        except Exception as e:
+            self.logger.warning(f"Batch fetch_tickers failed: {e}. Falling back to individual fetches.")
             for asset in assets_to_fetch:
                 try:
                     symbol = f"{asset}/{self.quote_currency}"
                     ticker = await self.exchange.fetch_ticker(symbol)
-                    await self._update_asset_price(asset, Decimal(str(ticker.get('last', '0'))))
-                except Exception as e:
-                    self.logger.warning(f"Failed to fetch price for {asset}: {e}")
+                    price = ticker.get('last')
+                    if price is not None:
+                        await self._update_asset_price(asset, Decimal(str(price)))
+                except Exception as e_single:
+                    self.logger.warning(f"Failed to fetch price for {asset}: {e_single}")
 
     async def _update_asset_price(self, asset: str, price: Decimal) -> None:
         """자산 가격 업데이트 및 브로드캐스트"""
+        if price <= 0:
+            return
+
+        # 보유/관심 자산인 경우, 전체 잔고 메시지 전송
         if asset in self.balance_manager.balances_cache:
             self.balance_manager.update_price(asset, price)
-            update_message = self.balance_manager.create_balance_update_message(asset, self.balance_manager.balances_cache[asset])
+            balance_data = self.balance_manager.balances_cache[asset]
+            update_message = self.balance_manager.create_balance_update_message(asset, balance_data)
             await self.app['broadcast_message'](update_message)
+        
+        # 보유/관심 자산이 아닌 경우 (예: 미체결 주문), 가격 정보만 전송
         else:
-            # 잔고 캐시에 없으면 주문 가격으로 저장
-            self.order_prices[asset] = price
-            update_message = {'symbol': asset, 'price': float(price)}
+            self.logger.debug(f"Sending price-only update for non-portfolio asset {asset}.")
+            update_message = {
+                'type': 'price_update',
+                'exchange': self.name,
+                'symbol': asset,
+                'price': float(price)
+            }
             await self.app['broadcast_message'](update_message)
 
-    async def fetch_and_update_price(self, symbol: str, asset: str) -> None:
-        """특정 심볼 가격 조회 및 업데이트"""
-        try:
-            ticker = await self.exchange.fetch_ticker(symbol)
-            current_price = Decimal(str(ticker.get('last', '0')))
-            if current_price > 0:
-                if asset in self.balance_manager.balances_cache:
-                    self.balance_manager.balances_cache[asset]['price'] = current_price
-                    update_message = self.balance_manager.create_balance_update_message(asset, self.balance_manager.balances_cache[asset])
-                    await self.app['broadcast_message'](update_message)
-                else:
-                    # 잔고 캐시에 없으면 price_update 메시지 전송
-                    update_message = {'symbol': asset, 'price': float(current_price)}
-                    await self.app['broadcast_message'](update_message)
-                    # 주문 가격도 업데이트
-                    self.order_prices[asset] = current_price
-                self.logger.debug(f"Fetched current price for {asset}: {current_price}")
-        except Exception as e:
-            self.logger.warning(f"Failed to fetch current price for {symbol}: {e}")
-
-    def get_next_ws_id(self) -> int:
-        """다음 웹소켓 ID 생성"""
-        ws_id = self.ws_id_counter
-        self.ws_id_counter += 1
-        return ws_id
-
-    async def watch_tickers_loop(self, tracked_assets: set) -> None:
+    async def watch_tickers_loop(self, symbols: List[str]) -> None:
         """가격 실시간 감시 루프"""
+        self.logger.info(f"Starting ticker watch for: {symbols}")
         while True:
             try:
-                symbols = [f"{asset}/{self.quote_currency}" for asset in tracked_assets if asset != self.quote_currency]
                 tickers = await self.exchange.watch_tickers(symbols)
                 for symbol, ticker in tickers.items():
                     asset = symbol.split('/')[0]
                     price = ticker.get('last')
 
-                    if not asset or not price:
+                    if not asset or price is None:
                         continue
 
-                    self.logger.debug(f"Price received for {asset}: {price}")
+                    await self._update_asset_price(asset, Decimal(str(price)))
 
-                    if asset in self.balance_manager.balances_cache:
-                        self.balance_manager.balances_cache[asset]['price'] = Decimal(str(price))
-                        update_message = self.balance_manager.create_balance_update_message(asset, self.balance_manager.balances_cache[asset])
-                    else:
-                        # 잔고 캐시에 없는 경우 price_update 메시지 전송
-                        update_message = {
-                            'type': 'price_update',
-                            'exchange': self.name,
-                            'symbol': asset,
-                            'price': float(price)
-                        }
-
-                    await self.app['broadcast_message'](update_message)
-
+            except asyncio.CancelledError:
+                self.logger.info("Ticker watch loop cancelled.")
+                break # 루프 정상 종료
             except Exception as e:
                 self.logger.error(f"An error occurred in price watch loop for {self.name}: {e}", exc_info=True)
-                await asyncio.sleep(5)
+                await asyncio.sleep(5) # 에러 발생 시 잠시 대기 후 재시도
+
+    def get_tracked_symbols(self) -> List[str]:
+        """현재 추적중인 모든 심볼 목록 반환"""
+        return [
+            f"{asset}/{self.quote_currency}" 
+            for asset in self.coordinator.tracked_assets 
+            if asset != self.quote_currency
+        ]

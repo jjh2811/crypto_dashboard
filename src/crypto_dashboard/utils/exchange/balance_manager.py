@@ -1,40 +1,31 @@
 import asyncio
 from decimal import Decimal
-from typing import Any, Dict, Optional, Set, List
+from typing import Any, Dict, Optional, Set, List, TYPE_CHECKING
 import logging
 
-from ...protocols import ExchangeProtocol, Balances
+from ...protocols import Balances
 from .exchange_utils import calculate_average_buy_price
+
+if TYPE_CHECKING:
+    from ...exchange_coordinator import ExchangeCoordinator
 
 
 class BalanceManager:
     """잔고 관리를 전담하는 서비스 클래스"""
 
-    def __init__(
-        self,
-        exchange: ExchangeProtocol,
-        logger: logging.Logger,
-        name: str,
-        quote_currency: str,
-        app: Any
-    ):
-        self.exchange = exchange
-        self.logger = logger
-        self.name = name
-        self.quote_currency = quote_currency
-        self.app = app
-        self.follows: Set[str] = set()
+    def __init__(self, coordinator: "ExchangeCoordinator"):
+        self.coordinator = coordinator
+        self.exchange = coordinator.exchange
+        self.logger = coordinator.logger
+        self.name = coordinator.name
+        self.quote_currency = coordinator.quote_currency
+        self.app = coordinator.app
+        self.follows = coordinator.follows
+        self.testnet = coordinator.testnet
+        self.whitelist = coordinator.whitelist
 
         # 캐시 데이터 초기화
         self.balances_cache: Dict[str, Dict[str, Any]] = {}
-
-        # 평균 가격 계산을 위한 추가 속성들
-        self.tracked_assets: Set[str] = set()
-
-        # testnet 설정 로드
-        self.config = app['config'].get('exchanges', {}).get(self.name.lower(), {})
-        self.testnet = 'testnet' in self.config and self.config['testnet'].get('use', False)
-        self.whitelist: List[str] = self.config.get('testnet', {}).get('whitelist', []) if self.testnet else []
 
     def add_follow_asset(self, asset: str) -> None:
         """감시할 자산 추가"""
@@ -129,60 +120,54 @@ class BalanceManager:
 
         return message
 
-    def handle_zero_balance(self, asset: str, is_existing: bool) -> None:
-        """잔고가 0인 코인을 처리하는 공통 로직"""
-        if not is_existing:
+    def handle_zero_balance(self, asset: str) -> None:
+        """잔고가 0이 된 자산을 처리합니다."""
+        if asset not in self.balances_cache:
             return
 
-        # 캐시 업데이트
-        if asset in self.tracked_assets or asset in self.follows:
-            # 잔고만 0으로 설정
-            if asset in self.balances_cache:
-                self.balances_cache[asset]['free'] = Decimal('0')
-                self.balances_cache[asset]['locked'] = Decimal('0')
-                self.balances_cache[asset]['total_amount'] = Decimal('0')
-            self.logger.info(f"Asset zeroed but kept for tracking: {asset}")
-
-            # 메시지 전송 (async)
-            try:
-                loop = asyncio.get_running_loop()
-                balance_data = self.balances_cache.get(asset, {})
-                update_message = self.create_balance_update_message(asset, balance_data)
-                asyncio.create_task(self.app['broadcast_message'](update_message))
-            except RuntimeError:
-                # No event loop running
-                pass
-
+        # follow 목록에 있으면 잔고만 0으로 업데이트
+        if asset in self.follows:
+            self.logger.info(f"Asset {asset} balance is zero, but kept as it is followed.")
+            self.balances_cache[asset]['free'] = Decimal('0')
+            self.balances_cache[asset]['locked'] = Decimal('0')
+            self.balances_cache[asset]['total_amount'] = Decimal('0')
+            
+            balance_data = self.balances_cache.get(asset, {})
+            update_message = self.create_balance_update_message(asset, balance_data)
+            asyncio.create_task(self.app['broadcast_message'](update_message))
+        
+        # follow 목록에 없으면 캐시에서 완전히 제거
         else:
-            # 완전 삭제
-            if asset in self.balances_cache:
-                del self.balances_cache[asset]
-            self.logger.info(f"Asset completely removed: {asset}")
+            self.logger.info(f"Asset {asset} balance is zero and not followed. Removing from balance cache.")
+            del self.balances_cache[asset]
+            
+            remove_message = {'type': 'remove_holding', 'symbol': asset, 'exchange': self.name}
+            asyncio.create_task(self.app['broadcast_message'](remove_message))
 
-            # 제거 메시지 전송 (async)
-            try:
-                loop = asyncio.get_running_loop()
-                remove_message = {'type': 'remove_holding', 'symbol': asset, 'exchange': self.name}
-                asyncio.create_task(self.app['broadcast_message'](remove_message))
-            except RuntimeError:
-                # No event loop running
-                pass
+        # 추적 자산 목록 업데이트 및 감시 루프 재시작 요청
+        asyncio.create_task(self.coordinator.update_tracked_assets_and_restart_watcher())
 
     def add_balance(self, asset: str, total_amount: Decimal, free: Decimal, used: Decimal) -> None:
         """새로운 잔고 추가 또는 업데이트"""
         is_existing = asset in self.balances_cache
         is_positive = total_amount > Decimal('0')
+        needs_update = False
 
         if is_positive:
             if not is_existing:
-                self.logger.info(f"New asset detected: {asset}, free: {free}, locked: {used}")
+                self.logger.info(f"New asset detected in balance: {asset}, free: {free}, locked: {used}")
+                self._init_dummy_balance(asset) # 새 자산에 대한 기본 항목 생성
+                needs_update = True
 
             self.balances_cache[asset]['free'] = free
             self.balances_cache[asset]['locked'] = used
             self.balances_cache[asset]['total_amount'] = total_amount
-            self.balances_cache[asset]['price'] = Decimal('1.0') if asset == self.quote_currency else self.balances_cache[asset].get('price', Decimal('0'))
+        
         elif not is_positive and is_existing:
-            self.handle_zero_balance(asset, is_existing)
+            self.handle_zero_balance(asset)
+
+        if needs_update:
+            asyncio.create_task(self.coordinator.update_tracked_assets_and_restart_watcher())
 
     def update_price(self, asset: str, price: Decimal) -> None:
         """자산 가격 업데이트"""

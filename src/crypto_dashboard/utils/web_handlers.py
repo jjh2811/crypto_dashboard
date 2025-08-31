@@ -64,7 +64,7 @@ async def handle_websocket(request):
             follow_message = {
                 'type': 'follow_coins',
                 'exchange': exchange_name,
-                'follows': getattr(exchange, 'follows', [])
+                'follows': list(getattr(exchange, 'follows', []))
             }
             await ws.send_json(follow_message)
 

@@ -1,30 +1,23 @@
 import asyncio
 from decimal import Decimal
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional, Set, TYPE_CHECKING
 import logging
 
-from ...protocols import ExchangeProtocol
-from .balance_manager import BalanceManager
+if TYPE_CHECKING:
+    from ...exchange_coordinator import ExchangeCoordinator
 
 
 class OrderManager:
     """주문 관리를 전담하는 서비스 클래스"""
 
-    def __init__(
-        self,
-        exchange: ExchangeProtocol,
-        logger: logging.Logger,
-        name: str,
-        quote_currency: str,
-        app: Any,
-        balance_manager: BalanceManager
-    ):
-        self.exchange = exchange
-        self.logger = logger
-        self.name = name
-        self.quote_currency = quote_currency
-        self.app = app
-        self.balance_manager = balance_manager
+    def __init__(self, coordinator: "ExchangeCoordinator"):
+        self.coordinator = coordinator
+        self.exchange = coordinator.exchange
+        self.logger = coordinator.logger
+        self.name = coordinator.name
+        self.quote_currency = coordinator.quote_currency
+        self.app = coordinator.app
+        self.balance_manager = coordinator.balance_manager
 
         # 캐시 데이터 초기화
         self.orders_cache: Dict[str, Dict[str, Any]] = {}
@@ -102,6 +95,7 @@ class OrderManager:
         # 이전 주문 정보 가져오기
         old_order = self.orders_cache.get(order_id, {})
         old_filled = Decimal(str(old_order.get('filled', '0')))
+        is_new = not bool(old_order)
 
         # 새 주문 정보 파싱
         status = order.get('status')
@@ -146,6 +140,9 @@ class OrderManager:
             'amount': float(trade_amount if trade_amount > 0 else order.get('amount', '0'))
         }
         asyncio.create_task(self.app['broadcast_log'](log_payload, self.name, self.logger))
+
+        # 주문 상태 변경이 추적 자산 목록에 영향을 줄 수 있으므로, 코디네이터에 업데이트 요청
+        asyncio.create_task(self.coordinator.update_tracked_assets_and_restart_watcher())
 
 
     async def _handle_filled_order(self, order: Dict[str, Any], trade_amount: Decimal):

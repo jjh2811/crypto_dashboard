@@ -108,10 +108,9 @@ async def on_startup(app):
             logger.error(f"Error during {exchange_name} exchange initialization: {result}")
         else:
             app['exchanges'][exchange_name] = instance
-            tickers_task = asyncio.create_task(instance.watch_tickers_loop())
             balance_task = asyncio.create_task(instance.watch_balance_loop())
             orders_task = asyncio.create_task(instance.watch_orders_loop())
-            app['exchange_tasks'].extend([tickers_task, balance_task, orders_task])
+            app['exchange_tasks'].extend([balance_task, orders_task])
             logger.info(f"Successfully initialized and connected to {exchange_name}.")
 
     logger.info("All exchange initializations complete.")

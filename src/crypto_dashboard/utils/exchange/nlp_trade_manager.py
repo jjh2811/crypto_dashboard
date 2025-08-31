@@ -1,28 +1,25 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from ...protocols import ExchangeProtocol
 from ...utils.nlp.entity_extractor import EntityExtractor
 from ...utils.nlp.trade_command_parser import TradeCommandParser
 from ...utils.nlp.trade_executor import TradeExecutor
 
+if TYPE_CHECKING:
+    from ...exchange_coordinator import ExchangeCoordinator
+
 
 class NlpTradeManager:
     """NLP 트레이딩 관리를 전담하는 서비스 클래스"""
 
-    def __init__(
-        self,
-        exchange: ExchangeProtocol,
-        logger: logging.Logger,
-        name: str,
-        quote_currency: str,
-        app: Any
-    ):
-        self.exchange = exchange
-        self.logger = logger
-        self.name = name
-        self.quote_currency = quote_currency
-        self.app = app
+    def __init__(self, coordinator: "ExchangeCoordinator"):
+        self.coordinator = coordinator
+        self.exchange = coordinator.exchange
+        self.logger = coordinator.logger
+        self.name = coordinator.name
+        self.quote_currency = coordinator.quote_currency
+        self.app = coordinator.app
 
         # NLP 컴포넌트 상태
         self.coins: List[str] = []
