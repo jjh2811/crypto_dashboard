@@ -7,9 +7,6 @@ import json
 import logging
 import os
 import secrets
-
-from aiohttp import web
-
 from ..exchange_coordinator import ExchangeCoordinator
 
 

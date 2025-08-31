@@ -5,7 +5,6 @@ import logging
 
 from aiohttp import web
 
-from .protocols import Balances
 from .utils.exchange import BalanceManager, OrderManager, PriceManager, NlpTradeManager, EventHandler
 
 
@@ -117,7 +116,7 @@ class ExchangeCoordinator:
             # 1. 새로운 추적 자산 목록 계산
             balance_assets = set(self.balance_manager.balances_cache.keys())
             order_assets = self.order_manager.get_order_asset_names()
-            
+
             new_tracked_set = set(self.follows) | balance_assets | order_assets
             new_tracked_set.add(self.quote_currency) # 항상 포함
 
@@ -127,7 +126,7 @@ class ExchangeCoordinator:
                 new_tracked_set &= allowed_assets
 
             old_tracked_set = self.tracked_assets
-            
+
             # 변경 사항이 없으면 재시작 안함 (초기화 시에는 무조건 실행)
             if not is_initial and new_tracked_set == old_tracked_set:
                 self.logger.debug("Tracked assets unchanged. Watcher not restarted.")
@@ -199,7 +198,7 @@ class ExchangeCoordinator:
                     await task
                 except asyncio.CancelledError:
                     pass # 정상 종료
-        
+
         await self.exchange.close()
         self.logger.info("Exchange connection closed and all tasks cancelled.")
 

@@ -3,15 +3,10 @@
 자연어 텍스트에서 거래 관련 엔티티(의도, 코인, 수량, 가격 등)를 추출합니다.
 정규식과 키워드 매칭을 사용하여 사용자 요청의 핵심 구성 요소를 식별합니다.
 """
-import logging
 from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, List, Optional
-from pathlib import Path
+import logging
 import re
-import unicodedata
-
-from ccxt.base.types import Order
-
+from typing import Any, Dict, List, Optional
 from ..text_utils import clean_text, sanitize_input
 
 

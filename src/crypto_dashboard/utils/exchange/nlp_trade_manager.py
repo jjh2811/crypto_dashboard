@@ -1,10 +1,7 @@
-import logging
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
-from ...protocols import ExchangeProtocol
 from ...utils.nlp.entity_extractor import EntityExtractor
 from ...utils.nlp.trade_command_parser import TradeCommandParser
-from ...utils.nlp.trade_executor import TradeExecutor
 
 if TYPE_CHECKING:
     from ...exchange_coordinator import ExchangeCoordinator
@@ -21,10 +18,9 @@ class NlpTradeManager:
         self.quote_currency = coordinator.quote_currency
         self.app = coordinator.app
 
-        # NLP 컴포넌트 상태
+        # NLP 컴포넌트 상태 - 리팩토링: PriceManager/OrderManager 직접 사용
         self.coins: List[str] = []
         self.parser: Optional[TradeCommandParser] = None
-        self.executor: Optional[TradeExecutor] = None
 
     async def initialize(self, nlptrade_config: Dict[str, Any]) -> None:
         """거래소의 코인 목록을 로드하고 NLP 관련 객체들을 초기화합니다."""
@@ -47,20 +43,28 @@ class NlpTradeManager:
             updated_nlptrade_config = nlptrade_config.copy()
             updated_nlptrade_config['quote_currency'] = self.quote_currency
 
-            # NLP 컴포넌트 초기화
+            # NLP 컴포넌트 초기화 (리팩토링: PriceManager/OrderManager 직접 사용)
             extractor = EntityExtractor(self.coins, updated_nlptrade_config, self.logger)
-            self.executor = TradeExecutor(self.exchange, self.quote_currency, self.logger)
 
             # TradeCommandParser에 필요한 인터페이스를 제공하는 mock 객체 생성
+            # - PriceManager와 OrderManager 직접 주입
             class MockExchangeBase:
-                def __init__(self, exchange, quote_currency, balances_cache):
+                def __init__(self, exchange, quote_currency, balances_cache, price_manager, order_manager):
                     self.exchange = exchange  # type: ignore
                     self.quote_currency = quote_currency  # type: ignore
                     self.balances_cache = balances_cache  # type: ignore
+                    self.price_manager = price_manager  # 리팩토링 추가
+                    self.order_manager = order_manager   # 리팩토링 추가
 
-            # 처음에는 빈 캐시로 시작, 나중에 업데이트
-            nlp_exchange_mock = MockExchangeBase(self.exchange, self.quote_currency, {})
-            self.parser = TradeCommandParser(extractor, self.executor, nlp_exchange_mock, self.logger)  # type: ignore
+            # coordinator를 통해 PriceManager, OrderManager, BalanceManager 주입
+            nlp_exchange_mock = MockExchangeBase(
+                self.exchange,
+                self.quote_currency,
+                self.coordinator.balance_manager.balances_cache,
+                self.coordinator.price_manager,
+                self.coordinator.order_manager
+            )
+            self.parser = TradeCommandParser(extractor, nlp_exchange_mock, self.logger)
             self.logger.info(f"NLP trader initialized successfully for {self.name}.")
 
         except Exception as e:
@@ -68,8 +72,8 @@ class NlpTradeManager:
             raise
 
     def is_ready(self) -> bool:
-        """NLP 컴포넌트가 준비되었는지 확인"""
-        return self.parser is not None and self.executor is not None
+        """NLP 컴포넌트가 준비되었는지 확인"""  # executor 제거 (리팩토링)
+        return self.parser is not None
 
     async def parse_command(self, text: str):
         """자연어 텍스트를 파싱하여 거래 명령으로 변환"""
@@ -79,11 +83,11 @@ class NlpTradeManager:
         return await self.parser.parse(text)
 
     async def execute_command(self, command):
-        """거래 명령 실행"""
-        if not self.executor:
-            raise ValueError(f"NLP executor not available for exchange: {self.name}")
+        """거래 명령 실행"""  # 리팩토링: OrderManager 직접 사용
+        if not self.parser:  # executor 대신 parser 확인
+            raise ValueError(f"NLP parser not available for exchange: {self.name}")
 
-        return await self.executor.execute(command)
+        return await self.coordinator.order_manager.execute_trade_command(command)
 
     def get_available_coins(self) -> List[str]:
         """사용 가능한 코인 목록 반환"""

@@ -1,7 +1,6 @@
 import asyncio
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING
-import logging
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...exchange_coordinator import ExchangeCoordinator
@@ -25,23 +24,23 @@ class EventHandler:
         while True:
             try:
                 balance_update = await self.exchange.watch_balance()
-                
+
                 # watch_balance가 전체 잔고를 반환하는 경우
                 if 'total' in balance_update:
                     all_assets = (
-                        set(balance_update.get('total', {}).keys()) | 
-                        set(balance_update.get('free', {}).keys()) | 
+                        set(balance_update.get('total', {}).keys()) |
+                        set(balance_update.get('free', {}).keys()) |
                         set(balance_update.get('used', {}).keys())
                     )
 
                     for asset in all_assets:
                         if self.testnet and asset not in self.whitelist and asset != self.coordinator.quote_currency:
                             continue
-                        
+
                         total = Decimal(str(balance_update.get('total', {}).get(asset, '0')))
                         free = Decimal(str(balance_update.get('free', {}).get(asset, '0')))
                         used = Decimal(str(balance_update.get('used', {}).get(asset, '0')))
-                        
+
                         # total이 free + used와 다를 경우, total을 우선
                         if total != free + used:
                             # ccxt는 종종 total만 제공하거나 free/used만 제공
@@ -49,7 +48,7 @@ class EventHandler:
                                 total = free + used
 
                         self.balance_manager.add_balance(asset, total, free, used)
-                
+
                 # watch_balance가 단일 자산 변경을 반환하는 경우 (e.g. binance)
                 elif 'asset' in balance_update:
                     asset = balance_update['asset']
@@ -59,7 +58,7 @@ class EventHandler:
                     free = Decimal(str(balance_update.get('free', '0')))
                     used = Decimal(str(balance_update.get('used', '0')))
                     total = free + used # 단일 업데이트는 free, used로 total 계산
-                    
+
                     self.balance_manager.add_balance(asset, total, free, used)
 
             except asyncio.CancelledError:

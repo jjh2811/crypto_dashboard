@@ -8,10 +8,14 @@ import os
 
 from aiohttp import web
 
-from .utils.auth import auth_middleware, get_secret_token
+from .utils.auth import auth_middleware
+from .utils.broadcast import (
+    basic_broadcast_log,
+    basic_broadcast_message,
+    basic_broadcast_orders_update,
+)
+from .utils.server_lifecycle import on_cleanup, on_shutdown, on_startup
 from .utils.web_handlers import handle_websocket, http_handler
-from .utils.server_lifecycle import on_startup, on_shutdown, on_cleanup
-from .utils.broadcast import basic_broadcast_message, basic_broadcast_orders_update, basic_broadcast_log
 
 
 @web.middleware

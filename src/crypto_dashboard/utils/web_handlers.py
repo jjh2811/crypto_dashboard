@@ -3,10 +3,11 @@
 HTTP 및 WebSocket 핸들러들을 제공합니다.
 """
 import asyncio
-import os
-import json
-from aiohttp import web
 from dataclasses import asdict
+import json
+import os
+
+from aiohttp import web
 
 from ..models.trade_models import TradeCommand
 from .text_utils import sanitize_input
@@ -24,7 +25,6 @@ async def http_handler(request):
 async def handle_websocket(request):
     """WebSocket 연결 핸들러"""
     from .broadcast import get_clients
-    from ..exchange_coordinator import ExchangeCoordinator
 
     app = request.app
     clients = get_clients()

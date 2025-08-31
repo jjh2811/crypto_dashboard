@@ -3,20 +3,12 @@
 추출된 엔티티를 파싱하여 최종적이고 검증된 TradeCommand를 구성합니다.
 상대 가격 계산, 총 비용을 수량으로 변환, 최종 주문 유형 결정과 같은 복잡한 로직을 처리합니다.
 """
-import logging
 from decimal import Decimal, InvalidOperation
-from typing import TYPE_CHECKING, Optional, Tuple
+import logging
+from typing import Optional, Tuple
 
-from ccxt.base.types import Num
-
-from ..text_utils import clean_text
 from ...models.trade_models import TradeCommand
-from ...protocols import ExchangeProtocol
 from .entity_extractor import EntityExtractor
-from .trade_executor import TradeExecutor
-
-if TYPE_CHECKING:
-    from ...exchange_base import ExchangeBase
 
 
 class TradeCommandParser:
@@ -24,9 +16,8 @@ class TradeCommandParser:
     추출된 엔티티를 파싱하여 최종적이고 검증된 `TradeCommand`를 구성합니다.
     상대 가격 계산, 총 비용을 수량으로 변환, 최종 주문 유형 결정과 같은 복잡한 로직을 처리합니다.
     """
-    def __init__(self, extractor: EntityExtractor, executor: TradeExecutor, exchange_base: 'ExchangeBase', logger: logging.Logger):
+    def __init__(self, extractor: EntityExtractor, exchange_base, logger: logging.Logger):  # type: ignore
         self.extractor = extractor
-        self.executor = executor
         self.exchange_base = exchange_base
         self.logger = logger
 
@@ -123,7 +114,7 @@ class TradeCommandParser:
         if entities.get("relative_price") is not None:
             intent = str(entities["intent"])
             relative_price_percentage = entities["relative_price"]
-            order_book = await self.executor.get_order_book(coin_symbol)
+            order_book = await self.exchange_base.price_manager.get_order_book(coin_symbol)
 
             if order_book:
                 base_price_num = order_book['bid'] if intent == 'buy' else order_book['ask']
@@ -146,7 +137,7 @@ class TradeCommandParser:
 
         # 암시적 현재가 주문 처리
         elif entities.get("current_price_order") and entities.get("price") is None:
-            order_book = await self.executor.get_order_book(coin_symbol)
+            order_book = await self.exchange_base.price_manager.get_order_book(coin_symbol)
             if order_book:
                 price_to_set_num = order_book['bid'] if entities.get("intent") == 'buy' else order_book['ask']
                 price_to_set = Decimal(str(price_to_set_num))
@@ -174,7 +165,7 @@ class TradeCommandParser:
         if total_cost is not None:
             price_to_use = entities.get("price")
             if price_to_use is None:
-                price_num = await self.executor.get_current_price(coin_symbol)
+                price_num = await self.exchange_base.price_manager.get_current_price(coin_symbol)
                 if price_num:
                     price_to_use, error = self._adjust_precision(Decimal(str(price_num)), market_symbol, 'price')
                     if error:
@@ -186,7 +177,7 @@ class TradeCommandParser:
                 if error:
                     return error
 
-                quote_currency = self.executor.quote_currency
+                quote_currency = self.exchange_base.quote_currency
                 self.logger.info(
                     f"계산된 수량: {total_cost} {quote_currency} / {price_to_use} {quote_currency}/coin -> "
                     f"{calculated_amount}, 정밀도 조정 후: {final_amount}"

@@ -1,7 +1,8 @@
 import asyncio
 from decimal import Decimal
-from typing import Any, Dict, Optional, Set, TYPE_CHECKING
-import logging
+from typing import Any, Dict, Set, TYPE_CHECKING
+
+from ...models.trade_models import TradeCommand
 
 if TYPE_CHECKING:
     from ...exchange_coordinator import ExchangeCoordinator
@@ -75,7 +76,7 @@ class OrderManager:
             if order_id and symbol:
                 task = asyncio.create_task(self.exchange.cancel_order(order_id, symbol))
                 cancellation_tasks.append(task)
-        
+
         results = await asyncio.gather(*cancellation_tasks, return_exceptions=True)
 
         for order, result in zip(all_orders, results):
@@ -95,12 +96,11 @@ class OrderManager:
         # 이전 주문 정보 가져오기
         old_order = self.orders_cache.get(order_id, {})
         old_filled = Decimal(str(old_order.get('filled', '0')))
-        is_new = not bool(old_order)
 
         # 새 주문 정보 파싱
         status = order.get('status')
         new_filled = Decimal(str(order.get('filled', '0')))
-        
+
         # 체결량 변화 감지
         trade_amount = new_filled - old_filled
         if trade_amount > 0:
@@ -129,12 +129,12 @@ class OrderManager:
 
         # 프론트엔드에 주문 목록 업데이트 브로드캐스트
         asyncio.create_task(self.app['broadcast_orders_update'](self.app['exchanges'].get(self.name)))
-        
+
         # 로그 브로드캐스트
         log_payload = {
-            'status': status, 
-            'symbol': order.get('symbol'), 
-            'side': order.get('side'), 
+            'status': status,
+            'symbol': order.get('symbol'),
+            'side': order.get('side'),
             'order_id': order_id,
             'price': float(order.get('average') or order.get('price') or '0'),
             'amount': float(trade_amount if trade_amount > 0 else order.get('amount', '0'))
@@ -150,7 +150,7 @@ class OrderManager:
         side = order.get('side')
         symbol = order.get('symbol')
         asset = symbol.split('/')[0] if symbol else None
-        
+
         # 체결 가격 (average가 있으면 사용, 없으면 price 사용)
         trade_price = Decimal(str(order.get('average') or order.get('price') or '0'))
 
@@ -168,3 +168,33 @@ class OrderManager:
     def get_order_asset_names(self) -> Set[str]:
         """주문에서 자산 이름들을 추출"""
         return {o['symbol'].split('/')[0] for o in self.orders_cache.values() if o.get('symbol')}
+
+    async def execute_trade_command(self, command: TradeCommand) -> Dict[str, Any]:
+        """TradeCommand를 받아 주문 생성 및 실행 (TradeExecutor의 execute 리팩토링)"""
+        self.logger.info(f"Executing trade command: {command}")
+
+        if not command.symbol or not command.amount:
+            self.logger.error("거래를 실행하려면 symbol과 amount가 반드시 필요합니다.")
+            return {"status": "error", "message": "Symbol or amount is missing"}
+
+        try:
+            # create_order에 필요한 파라미터들 준비
+            symbol = command.symbol
+            order_type = command.order_type
+            side = command.intent
+            amount = float(command.amount)
+            price = float(command.price) if command.price else None
+
+            # 실제 주문 실행
+            self.logger.info(f"Creating order: {side} {amount} {symbol} at price {price}")
+            order = await self.exchange.create_order(symbol, order_type, side, amount, price)
+            self.logger.info("Successfully created order")
+
+            return {
+                "status": "success",
+                "order_details": order
+            }
+
+        except Exception as e:
+            self.logger.error(f"Order creation failed: {e}", exc_info=True)
+            return {"status": "error", "message": f"An unexpected error occurred: {e}"}
