@@ -188,3 +188,57 @@ class BalanceManager:
         """자산 가격 업데이트"""
         if asset in self.balances_cache and price > 0:
             self.balances_cache[asset]['price'] = price
+
+    async def update_average_price_on_buy(self, asset: str, filled_amount: Decimal, average_price: Decimal) -> None:
+        """매수 체결 후 평균 매수 단가를 업데이트합니다."""
+        if asset not in self.balances_cache:
+            self.logger.warning(f"Cannot update avg_price for untracked asset: {asset}")
+            return
+
+        balances = self.balances_cache[asset]
+        old_total_amount = balances.get('total_amount', Decimal('0'))
+        old_avg_price = balances.get('avg_buy_price')
+
+        # 새로운 평균 매수 단가 계산
+        if old_avg_price is None or old_avg_price <= 0 or old_total_amount <= 0:
+            new_avg_price = average_price
+        else:
+            old_cost = old_total_amount * old_avg_price
+            fill_cost = filled_amount * average_price
+            new_total_amount = old_total_amount + filled_amount
+            new_avg_price = (old_cost + fill_cost) / new_total_amount if new_total_amount > 0 else average_price
+
+        balances['avg_buy_price'] = new_avg_price
+        self.logger.info(f"Average price for {asset} updated to {new_avg_price} after buy.")
+
+        # 업데이트된 잔고 정보 브로드캐스트
+        update_message = self.create_balance_update_message(asset, balances)
+        await self.app['broadcast_message'](update_message)
+
+    async def update_realized_pnl_on_sell(self, asset: str, filled_amount: Decimal, average_price: Decimal) -> None:
+        """매도 체결 후 실현 손익을 업데이트합니다."""
+        if asset not in self.balances_cache:
+            self.logger.warning(f"Cannot update pnl for untracked asset: {asset}")
+            return
+
+        balances = self.balances_cache[asset]
+        avg_buy_price = balances.get('avg_buy_price')
+
+        if avg_buy_price is None or avg_buy_price <= 0:
+            self.logger.warning(f"Cannot calculate realized PnL for {asset} without avg_buy_price.")
+            return
+
+        # 실현 손익 계산
+        profit = (average_price - avg_buy_price) * filled_amount
+        
+        # 기존 실현 손익에 누적
+        if balances.get('realised_pnl') is None:
+            balances['realised_pnl'] = profit
+        else:
+            balances['realised_pnl'] += profit
+
+        self.logger.info(f"Realized PnL for {asset} updated by {profit}. Total: {balances['realised_pnl']}")
+
+        # 업데이트된 잔고 정보 브로드캐스트
+        update_message = self.create_balance_update_message(asset, balances)
+        await self.app['broadcast_message'](update_message)

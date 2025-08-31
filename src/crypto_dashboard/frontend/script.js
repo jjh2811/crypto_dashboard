@@ -80,6 +80,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 } else if (data.type === 'orders_update') {
                     cachedOrders = data.data;
                     updateOrdersList();
+                } else if (data.type === 'price_update') {
+                    currentPrices[data.symbol] = parseFloat(data.price);
+                    updatePriceDiffs();
                 } else if (data.type === 'log') {
                     cachedLogs.unshift(data);
                     updateLogsList();
@@ -92,11 +95,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 } else if (data.type === 'nlp_error') {
                     alertModalText.textContent = data.message;
                     alertModal.style.display = "block";
-                } else {
-                    currentPrices[data.symbol] = parseFloat(data.price);
-                    updateModalUnrealisedPnL(data.symbol, data.price);
-                    updatePriceDiffs();
-                }
+                } 
             } catch (e) {
                 console.error("Failed to parse JSON:", e);
             }
@@ -290,6 +289,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         updateTotalValue();
+
+        // 가격이 업데이트되었으므로 주문 목록의 Diff를 업데이트합니다.
+        updatePriceDiffs();
 
         if (modal.style.display === "block" && document.getElementById("modal-crypto-name").textContent === symbol) {
             const currentCryptoId = modal.dataset.currentCryptoId;
@@ -663,33 +665,6 @@ document.addEventListener("DOMContentLoaded", () => {
             referenceTimeElement.textContent = date.toLocaleString();
         } else {
             referenceTimeContainer.style.display = 'none';
-        }
-    }
-
-    function updateModalUnrealisedPnL(symbol, price) {
-        if (modal.style.display === "block") {
-            const currentCryptoId = modal.dataset.currentCryptoId;
-            if (currentCryptoId) {
-                const [exchange, currentSymbol] = currentCryptoId.split('_');
-                if (currentSymbol === symbol) {
-                    const card = document.getElementById(currentCryptoId);
-                    if (card) {
-                        const avg_buy_price = parseFloat(card.dataset.avg_buy_price);
-                        const free = parseFloat(card.dataset.free || 0);
-                        const locked = parseFloat(card.dataset.locked || 0);
-                        const totalAmount = free + locked;
-                        if (avg_buy_price && totalAmount) {
-                            const unrealised_pnl = (price - avg_buy_price) * totalAmount;
-                            const pnlElement = modal.querySelector("#modal-crypto-balance-details .info-row:nth-child(2) .info-value");
-                            if (pnlElement) {
-                                const decimalPlaces = valueFormats[exchange] ?? 3;
-                                pnlElement.textContent = (unrealised_pnl > 0 ? '+' : '') + unrealised_pnl.toFixed(decimalPlaces);
-                                pnlElement.className = `info-value ${unrealised_pnl >= 0 ? 'profit-positive' : 'profit-negative'}`;
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 

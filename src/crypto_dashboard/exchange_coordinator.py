@@ -62,7 +62,7 @@ class ExchangeCoordinator:
         )
 
         self.order_manager = OrderManager(
-            self.exchange, self.logger, self.name, self.quote_currency, self.app
+            self.exchange, self.logger, self.name, self.quote_currency, self.app, self.balance_manager
         )
 
         self.price_manager = PriceManager(

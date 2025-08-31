@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional, Set
 import logging
 
 from ...protocols import ExchangeProtocol
+from .balance_manager import BalanceManager
 
 
 class OrderManager:
@@ -15,13 +16,15 @@ class OrderManager:
         logger: logging.Logger,
         name: str,
         quote_currency: str,
-        app: Any
+        app: Any,
+        balance_manager: BalanceManager
     ):
         self.exchange = exchange
         self.logger = logger
         self.name = name
         self.quote_currency = quote_currency
         self.app = app
+        self.balance_manager = balance_manager
 
         # 캐시 데이터 초기화
         self.orders_cache: Dict[str, Dict[str, Any]] = {}
@@ -31,6 +34,7 @@ class OrderManager:
         for order in open_orders:
             price = Decimal(str(order.get('price') or 0))
             amount = Decimal(str(order.get('amount') or 0))
+            filled = Decimal(str(order.get('filled') or 0))
             order_id = order.get('id')
             if order_id:
                 self.orders_cache[order_id] = {
@@ -39,7 +43,8 @@ class OrderManager:
                     'side': order.get('side'),
                     'price': float(price),
                     'amount': float(amount),
-                    'value': float(price * amount),
+                    'filled': float(filled),
+                    'value': float(price * (amount - filled)), # 미체결 수량 기준 가치
                     'quote_currency': self.quote_currency,
                     'timestamp': order.get('timestamp'),
                     'status': order.get('status')
@@ -49,17 +54,10 @@ class OrderManager:
     async def cancel_order(self, order_id: str, symbol: str) -> None:
         """단일 주문 취소"""
         try:
-            # 취소 진행 로그 전송
             await self.app['broadcast_log']({'status': 'Cancelling', 'symbol': symbol, 'order_id': order_id}, self.name, self.logger)
-
-            # 실제 취소 요청
-            cancelled_order = await self.exchange.cancel_order(order_id, symbol)
+            await self.exchange.cancel_order(order_id, symbol)
             self.logger.info(f"Successfully sent cancel request for order {order_id}")
-
-            # 캐시에서 즉시 제거
-            if order_id in self.orders_cache:
-                del self.orders_cache[order_id]
-                self.logger.info(f"Removed order {order_id} from cache after successful cancel request")
+            # 캐시 제거는 watch_orders 이벤트가 처리하도록 둠
 
         except Exception as e:
             self.logger.error(f"Failed to cancel order {order_id}: {e}")
@@ -76,101 +74,99 @@ class OrderManager:
 
         await self.app['broadcast_log']({'status': 'Info', 'message': f'Cancelling all {len(all_orders)} orders.'}, self.name, self.logger)
 
+        # 병렬로 모든 주문 취소 요청
+        cancellation_tasks = []
         for order in all_orders:
             order_id = order.get('id')
             symbol = order.get('symbol', '')
-            if not order_id or not symbol:
-                continue
-            try:
-                await self.exchange.cancel_order(order_id, symbol)
-                self.logger.info(f"Successfully sent cancel request for order {order_id}")
-            except Exception as e:
-                self.logger.error(f"Failed to cancel order {order_id}: {e}")
-                await self.app['broadcast_log']({'status': 'Cancel Failed', 'symbol': symbol, 'order_id': order_id, 'reason': str(e)}, self.name, self.logger)
+            if order_id and symbol:
+                task = asyncio.create_task(self.exchange.cancel_order(order_id, symbol))
+                cancellation_tasks.append(task)
+        
+        results = await asyncio.gather(*cancellation_tasks, return_exceptions=True)
 
-        self.orders_cache.clear()
-        await self.app['broadcast_orders_update'](self.app['exchanges'].get(self.name))
+        for order, result in zip(all_orders, results):
+            order_id = order.get('id')
+            if isinstance(result, Exception):
+                self.logger.error(f"Failed to cancel order {order_id}: {result}")
+                await self.app['broadcast_log']({'status': 'Cancel Failed', 'symbol': order.get('symbol'), 'order_id': order_id, 'reason': str(result)}, self.name, self.logger)
+            else:
+                self.logger.info(f"Successfully sent cancel request for order {order_id}")
 
     def update_order(self, order: Dict[str, Any]) -> None:
         """주문 업데이트 처리 (웹소켓 이벤트에서 호출)"""
         order_id = order.get('id')
-        symbol = order.get('symbol')
+        if not order_id:
+            return
+
+        # 이전 주문 정보 가져오기
+        old_order = self.orders_cache.get(order_id, {})
+        old_filled = Decimal(str(old_order.get('filled', '0')))
+
+        # 새 주문 정보 파싱
         status = order.get('status')
-        if not all([order_id, symbol, status]):
-            return
+        new_filled = Decimal(str(order.get('filled', '0')))
+        
+        # 체결량 변화 감지
+        trade_amount = new_filled - old_filled
+        if trade_amount > 0:
+            asyncio.create_task(self._handle_filled_order(order, trade_amount))
 
-        asset = symbol.split('/')[0] if symbol else None
-        if not asset:
-            return
-
-        side = order.get('side')
-        price = Decimal(str(order.get('price') or '0'))
-        amount = Decimal(str(order.get('amount') or '0'))
-        filled = Decimal(str(order.get('filled') or '0'))
-
-        log_payload = {'status': status, 'symbol': symbol, 'side': side, 'order_id': order_id}
-
-        if status == 'open':
-            if order_id and symbol:
-                self.orders_cache[order_id] = {
-                    'id': order_id,
-                    'symbol': symbol,
-                    'side': side,
-                    'price': float(price),
-                    'amount': float(amount),
-                    'filled': float(filled),
-                    'value': float(price * amount),
-                    'quote_currency': self.quote_currency,
-                    'timestamp': order.get('timestamp'),
-                    'status': status
-                }
-                log_payload.update({'price': float(price), 'amount': float(amount)})
-                asyncio.create_task(self.app['broadcast_log'](log_payload, self.name, self.logger))
-
-                # 가격 fetch 및 업데이트
-                asyncio.create_task(self._fetch_and_update_price(symbol, asset))
-
-        elif status in ('closed', 'canceled'):
+        # 캐시 업데이트 및 브로드캐스트
+        if status in ('closed', 'canceled'):
             if order_id in self.orders_cache:
                 del self.orders_cache[order_id]
+                self.logger.info(f"Order {order_id} ({status}) removed from cache.")
+        else: # open (partially filled 포함)
+            price = Decimal(str(order.get('price') or '0'))
+            amount = Decimal(str(order.get('amount') or '0'))
+            self.orders_cache[order_id] = {
+                'id': order_id,
+                'symbol': order.get('symbol', ''),
+                'side': order.get('side'),
+                'price': float(price),
+                'amount': float(amount),
+                'filled': float(new_filled),
+                'value': float(price * (amount - new_filled)),
+                'quote_currency': self.quote_currency,
+                'timestamp': order.get('timestamp'),
+                'status': status
+            }
 
-            if status == 'closed':
-                log_payload.update({'price': float(order.get('average') or '0'), 'amount': float(filled)})
-
-            asyncio.create_task(self.app['broadcast_log'](log_payload, self.name, self.logger))
-
-        # 주문 업데이트 브로드캐스트
+        # 프론트엔드에 주문 목록 업데이트 브로드캐스트
         asyncio.create_task(self.app['broadcast_orders_update'](self.app['exchanges'].get(self.name)))
+        
+        # 로그 브로드캐스트
+        log_payload = {
+            'status': status, 
+            'symbol': order.get('symbol'), 
+            'side': order.get('side'), 
+            'order_id': order_id,
+            'price': float(order.get('average') or order.get('price') or '0'),
+            'amount': float(trade_amount if trade_amount > 0 else order.get('amount', '0'))
+        }
+        asyncio.create_task(self.app['broadcast_log'](log_payload, self.name, self.logger))
 
-    async def _fetch_and_update_price(self, symbol: str, asset: str) -> None:
-        """가격 조회 및 업데이트"""
-        try:
-            ticker = await self.exchange.fetch_ticker(symbol)
-            current_price = Decimal(str(ticker.get('last', '0')))
-            if current_price > 0:
-                update_message = {'symbol': asset, 'price': float(current_price)}
-                await self.app['broadcast_message'](update_message)
-                self.logger.debug(f"Fetched current price for {asset}: {current_price}")
-        except Exception as e:
-            self.logger.warning(f"Failed to fetch current price for {symbol}: {e}")
 
-    def add_order_from_trade(self, asset: str, filled: Decimal, average_price: Decimal, side: str, balance_manager: Any) -> None:
-        """거래 완료 시 잔고 평균 가격 업데이트"""
-        if side == 'buy' and asset in balance_manager.balances_cache and filled > 0:
-            balances = balance_manager.balances_cache[asset]
-            old_total_amount = balances.get('total_amount', Decimal('0')) - filled
-            old_avg_price = balances.get('avg_buy_price')
+    async def _handle_filled_order(self, order: Dict[str, Any], trade_amount: Decimal):
+        """체결된 주문을 처리하여 잔고 및 손익을 업데이트합니다."""
+        side = order.get('side')
+        symbol = order.get('symbol')
+        asset = symbol.split('/')[0] if symbol else None
+        
+        # 체결 가격 (average가 있으면 사용, 없으면 price 사용)
+        trade_price = Decimal(str(order.get('average') or order.get('price') or '0'))
 
-            if old_avg_price is None or old_avg_price <= 0 or old_total_amount <= 0:
-                new_avg_price = average_price
-            else:
-                old_cost = old_total_amount * old_avg_price
-                fill_cost = filled * average_price
-                new_total_amount = old_total_amount + filled
-                new_avg_price = (old_cost + fill_cost) / new_total_amount if new_total_amount > 0 else average_price
+        if not side or not asset or not trade_price > 0:
+            self.logger.warning(f"Could not handle filled order due to missing data: {order}")
+            return
 
-            balances['avg_buy_price'] = new_avg_price
-            self.logger.info(f"Average price for {asset} updated to {new_avg_price} by trade.")
+        self.logger.info(f"Handling filled order: {side} {trade_amount} {asset} at {trade_price}")
+
+        if side == 'buy':
+            await self.balance_manager.update_average_price_on_buy(asset, trade_amount, trade_price)
+        elif side == 'sell':
+            await self.balance_manager.update_realized_pnl_on_sell(asset, trade_amount, trade_price)
 
     def get_order_asset_names(self) -> Set[str]:
         """주문에서 자산 이름들을 추출"""
