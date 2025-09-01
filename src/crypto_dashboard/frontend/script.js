@@ -24,6 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let followCoins = {};  // follow 코인 캐시: {exchange: Set(coins)}
     let valueFormats = {};  // value 소수점 포맷: {exchange: integer}
     let exchangeInfo = {}; // quote_currency 등 거래소 정보 저장
+    let referencePrices = {}; // 기준 가격 정보 저장
 
     const modal = document.getElementById("details-modal");
     const closeButton = document.querySelector(".close-button");
@@ -148,6 +149,26 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                 } else if (data.type === 'reference_price_info') {
                     updateReferencePriceInfo(data.time);
+                    referencePrices = data.prices || {};
+                    // Re-render all visible cards to apply the new reference prices
+                    document.querySelectorAll('#crypto-container .crypto-card').forEach(card => {
+                        if (card.style.display !== 'none') {
+                            // Re-rendering needs a complete data object.
+                            // We reconstruct it from the card's dataset.
+                            const marketSymbol = card.dataset.symbol;
+                            const exchange = card.dataset.exchange;
+                            const price = currentPrices[marketSymbol] || parseFloat(card.dataset.price || 0);
+                            const free = parseFloat(card.dataset.free || 0);
+                            const locked = parseFloat(card.dataset.locked || 0);
+                            const value = price * (free + locked);
+
+                            renderCryptoCard({
+                                ...card.dataset,
+                                price,
+                                value
+                            });
+                        }
+                    });
                 } else if (data.type === 'nlp_trade_confirm') {
                     confirmModalText.innerHTML = formatTradeCommandForConfirmation(data.command);
                     pendingNlpCommand = data.command;
@@ -321,11 +342,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Renders or updates the crypto card DOM based on a complete data object
     function renderCryptoCard(data) {
-        const { symbol, price, exchange, value, avg_buy_price, free, locked, price_change_percent } = data; // symbol is "BTC/USDT"
+        const { symbol, price, exchange, value, avg_buy_price, free, locked } = data; // symbol is "BTC/USDT"
         const uniqueId = `${exchange}_${symbol}`;
         let card = document.getElementById(uniqueId);
 
         const decimalPlaces = valueFormats[exchange] ?? 3;
+
+        // Calculate price_change_percent based on reference prices
+        let price_change_percent = null;
+        const baseSymbol = symbol.split('/')[0];
+        if (referencePrices[exchange] && referencePrices[exchange][baseSymbol]) {
+            const refPrice = referencePrices[exchange][baseSymbol];
+            if (refPrice > 0) {
+                price_change_percent = ((parseFloat(price) - refPrice) / refPrice) * 100;
+            }
+        }
 
         // Calculate Unrealized PnL and ROI here
         let unrealised_pnl = null;
@@ -347,7 +378,7 @@ document.addEventListener("DOMContentLoaded", () => {
             card.id = uniqueId;
             card.className = "crypto-card";
             // Pass calculated values to the HTML creation function
-            card.innerHTML = createCryptoCardHTML({ ...data, roi });
+            card.innerHTML = createCryptoCardHTML({ ...data, roi, price_change_percent });
             cryptoContainer.appendChild(card);
         }
 
@@ -362,7 +393,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Update Price and Price Change
         if (priceElement) priceElement.textContent = formatNumber(currentPrice);
         if (priceChangeElement) {
-            if (price_change_percent !== undefined && price_change_percent !== null) {
+            if (price_change_percent !== null) {
                 const change = parseFloat(price_change_percent);
                 const changeClass = change >= 0 ? 'profit-positive' : 'profit-negative';
                 priceChangeElement.className = `price-change-percent ${changeClass}`;

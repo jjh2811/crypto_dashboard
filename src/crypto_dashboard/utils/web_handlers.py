@@ -60,6 +60,23 @@ async def handle_websocket(request):
                 'prices': app['reference_prices']
             })
         for exchange_name, exchange in exchanges.items():
+            # Fetch and send initial prices via REST for all tracked assets at once
+            try:
+                tracked_symbols = exchange.price_manager.get_tracked_symbols()
+                if tracked_symbols:
+                    tickers = await exchange.exchange.fetch_tickers(symbols=tracked_symbols)
+                    for symbol, ticker in tickers.items():
+                        price = ticker.get('last')
+                        if price is not None:
+                            await ws.send_json({
+                                'type': 'price_update',
+                                'exchange': exchange_name,
+                                'symbol': symbol,
+                                'price': float(price)
+                            })
+            except Exception as e:
+                logger.error(f"Failed to fetch initial tickers for {exchange_name}: {e}")
+
             # 초기에 follow 코인 목록 및 포맷 설정 전송
             follow_message = {
                 'type': 'follow_coins',
