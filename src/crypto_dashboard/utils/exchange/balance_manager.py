@@ -108,14 +108,11 @@ class BalanceManager:
         }
 
         reference_prices = self.app.get('reference_prices', {})
-        reference_time = self.app.get('reference_time')
-
         if reference_prices and self.name in reference_prices and symbol in reference_prices[self.name]:
             ref_price = Decimal(str(reference_prices[self.name][symbol]))
             if ref_price > 0:
                 price_change_percent = (price - ref_price) / ref_price * 100
                 message['price_change_percent'] = float(price_change_percent)
-                message['reference_time'] = reference_time
 
         return message
 

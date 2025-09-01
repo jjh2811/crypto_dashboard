@@ -260,41 +260,89 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function updateCryptoCard(data) {
-        const { symbol, price, exchange } = data;
+        const { symbol, price, exchange, value, avg_buy_price, price_change_percent } = data;
         const uniqueId = `${exchange}_${symbol}`;
         currentPrices[symbol] = parseFloat(price);
         let card = document.getElementById(uniqueId);
 
+        const decimalPlaces = valueFormats[exchange] ?? 3;
+
         if (!card) {
+            // Card does not exist, create it for the first time.
             card = document.createElement("div");
             card.id = uniqueId;
             card.className = "crypto-card";
+            card.innerHTML = createCryptoCardHTML(data);
             cryptoContainer.appendChild(card);
+        } else {
+            // Card exists, update only the necessary parts.
+            const priceElement = card.querySelector(".price-value");
+            const priceChangeElement = card.querySelector(".price-change-percent");
+            const avgPriceElement = card.querySelector(".avg-price-value");
+            const roiElement = card.querySelector(".roi-value");
+            const valueContainer = card.querySelector(".value");
+            const valueElement = card.querySelector(".value-text");
+
+            // Update Price and Price Change
+            if (priceElement) priceElement.textContent = parseFloat(price.toPrecision(8));
+            if (priceChangeElement) {
+                if (price_change_percent !== undefined) {
+                    const change = parseFloat(price_change_percent);
+                    const changeClass = change >= 0 ? 'profit-positive' : 'profit-negative';
+                    priceChangeElement.className = `price-change-percent ${changeClass}`;
+                    priceChangeElement.textContent = `(${change.toFixed(2)}%)`;
+                } else {
+                    priceChangeElement.textContent = '';
+                }
+            }
+
+            // Update Avg. Price and ROI
+            if (avg_buy_price && Number.isFinite(parseFloat(avg_buy_price))) {
+                const avgPrice = parseFloat(avg_buy_price);
+                const currentPrice = Number.isFinite(parseFloat(price)) ? parseFloat(price) : 0;
+                const profitPercent = avgPrice > 0 ? ((currentPrice - avgPrice) / avgPrice) * 100 : 0;
+                const profitClass = profitPercent >= 0 ? 'profit-positive' : 'profit-negative';
+
+                if (avgPriceElement) avgPriceElement.textContent = parseFloat(avgPrice.toPrecision(8));
+                if (roiElement) {
+                    roiElement.className = `info-value roi-value ${profitClass}`;
+                    roiElement.textContent = `${profitPercent.toFixed(2)}%`;
+                }
+            } else {
+                if (avgPriceElement) avgPriceElement.textContent = '-';
+                if (roiElement) {
+                    roiElement.className = 'info-value roi-value';
+                    roiElement.textContent = '-';
+                }
+            }
+
+            // Update Value
+            if (valueContainer) valueContainer.dataset.value = parseFloat(value).toFixed(decimalPlaces);
+            if (valueElement) valueElement.textContent = parseFloat(value).toFixed(decimalPlaces);
         }
 
+        // Update dataset for modal and other interactions
         Object.keys(data).forEach(key => {
             card.dataset[key] = data[key];
         });
 
-        // Follow 코인에 대한 스타일 적용 (캐시된 정보 활용)
+        // Update styling for followed zero-balance coins
         const totalAmount = parseFloat(card.dataset.free || 0) + parseFloat(card.dataset.locked || 0);
         const isZeroBalance = totalAmount === 0;
         const baseAsset = symbol.split('/')[0];
         const is_follow = followCoins[exchange]?.has(baseAsset) || false;
-
         card.classList.toggle('follow-zero-balance', is_follow && isZeroBalance);
 
-        card.innerHTML = createCryptoCardHTML(data);
+        // Hide if not in active exchange
         if (activeExchange && card.dataset.exchange !== activeExchange) {
             card.style.display = 'none';
         }
 
         updateTotalValue();
-
-        // 가격이 업데이트되었으므로 주문 목록의 Diff를 업데이트합니다.
         updatePriceDiffs();
 
-        if (modal.style.display === "block" && document.getElementById("modal-crypto-name").textContent === symbol) {
+        // Update modal if it's open for this crypto
+        if (modal.style.display === "block" && document.getElementById("modal-crypto-name").textContent === symbol.split('/')[0]) {
             const currentCryptoId = modal.dataset.currentCryptoId;
             const currentExchange = currentCryptoId ? currentCryptoId.split('_')[0] : null;
             if (currentExchange === exchange) {
@@ -368,41 +416,112 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function updateOrdersList() {
-        const checkedOrderIds = new Set();
-        ordersContainer.querySelectorAll('.order-checkbox:checked').forEach(checkbox => {
-            checkedOrderIds.add(checkbox.dataset.orderId);
-        });
-
-        ordersContainer.innerHTML = "";
-        
         const filteredOrders = cachedOrders.filter(order => order.exchange === activeExchange);
+        const orderIdsOnScreen = new Set(Array.from(ordersContainer.querySelectorAll('.crypto-card[data-order-id]')).map(card => card.dataset.orderId));
+        const incomingOrderIds = new Set(filteredOrders.map(order => order.id.toString()));
+
+        // Remove orders that are no longer in the list
+        orderIdsOnScreen.forEach(id => {
+            if (!incomingOrderIds.has(id)) {
+                const cardToRemove = ordersContainer.querySelector(`.crypto-card[data-order-id='${id}']`);
+                if (cardToRemove) {
+                    cardToRemove.remove();
+                }
+            }
+        });
 
         if (filteredOrders.length === 0) {
             ordersContainer.innerHTML = "<p>현재 활성화된 주문이 없습니다.</p>";
             return;
         }
-
-        filteredOrders.sort((a, b) => b.timestamp - a.timestamp).forEach(order => {
-            const orderCard = document.createElement("div");
-            orderCard.className = "crypto-card";
-            orderCard.dataset.orderId = order.id;
-            orderCard.dataset.exchange = order.exchange;
+        
+        // Add or update orders
+        filteredOrders.forEach(order => {
+            const orderId = order.id.toString();
+            let orderCard = ordersContainer.querySelector(`.crypto-card[data-order-id='${orderId}']`);
             const currentPrice = currentPrices[order.symbol];
 
-            orderCard.innerHTML = createOrderCardHTML(order, currentPrice);
-            ordersContainer.appendChild(orderCard);
-        });
+            if (orderCard) {
+                // Order exists, update it
+                updateOrderCard(orderCard, order, currentPrice);
+            } else {
+                // New order, create and append it
+                const emptyState = ordersContainer.querySelector("p");
+                if (emptyState) emptyState.remove();
 
-        checkedOrderIds.forEach(orderId => {
-            const checkbox = ordersContainer.querySelector(`.order-checkbox[data-order-id='${orderId}']`);
-            if (checkbox) {
-                checkbox.checked = true;
-                const card = checkbox.closest('.crypto-card');
-                if (card) {
-                    card.classList.add('selected');
+                orderCard = document.createElement("div");
+                orderCard.className = "crypto-card";
+                orderCard.dataset.orderId = orderId;
+                orderCard.dataset.exchange = order.exchange;
+                orderCard.innerHTML = createOrderCardHTML(order, currentPrice);
+                
+                // Insert in sorted order (newest first)
+                const timestamp = order.timestamp;
+                let inserted = false;
+                for (const child of ordersContainer.children) {
+                    const childTimestamp = cachedOrders.find(o => o.id.toString() === child.dataset.orderId)?.timestamp;
+                    if (childTimestamp && timestamp > childTimestamp) {
+                        ordersContainer.insertBefore(orderCard, child);
+                        inserted = true;
+                        break;
+                    }
+                }
+                if (!inserted) {
+                    ordersContainer.appendChild(orderCard);
                 }
             }
         });
+    }
+
+    function updateOrderCard(card, order, currentPrice) {
+        // This function updates an existing order card with new data
+        const { amount, filled, price, side } = order;
+        const quoteCurrency = order.quote_currency || (order.symbol.includes('/') ? order.symbol.split('/')[1] : 'USDT');
+        const orderDecimalPlaces = valueFormats[quoteCurrency.toLowerCase()] ?? 3;
+
+        // Update Price Difference
+        const priceDiffElement = card.querySelector('.price-diff-value');
+        if (priceDiffElement) {
+            let priceDiffText = '-';
+            let diffClass = '';
+            if (currentPrice) {
+                const priceDifference = price - currentPrice;
+                const priceDiffPercent = currentPrice > 0 ? (priceDifference / currentPrice) * 100 : 0;
+                diffClass = priceDifference > 0 ? 'diff-positive' : (priceDifference < 0 ? 'diff-negative' : 'profit-neutral');
+                const formattedAmount = priceDifference > 0 ? `+${formatNumber(priceDifference)}` : formatNumber(priceDifference);
+                priceDiffText = `${formattedAmount} (${priceDiffPercent.toFixed(2)}%)`;
+            }
+            priceDiffElement.className = `info-value price-diff-value ${diffClass}`;
+            priceDiffElement.textContent = priceDiffText;
+        }
+
+        // Update Amount and Progress Bar
+        const amountElement = card.querySelector('.amount-value');
+        const progressBarElement = card.querySelector('.progress-bar');
+        if (amountElement && progressBarElement) {
+            const totalAmount = parseFloat(amount) || 0;
+            const filledAmount = parseFloat(filled) || 0;
+            let amountText;
+            let progress;
+
+            if (side.toUpperCase() === 'BUY') {
+                amountText = `${formatNumber(filledAmount)} / ${formatNumber(totalAmount)}`;
+                progress = totalAmount > 0 ? (filledAmount / totalAmount) * 100 : 0;
+            } else { // SELL
+                const unfilled = totalAmount - filledAmount;
+                amountText = `${formatNumber(unfilled)} / ${formatNumber(totalAmount)}`;
+                progress = totalAmount > 0 ? (unfilled / totalAmount) * 100 : 0;
+            }
+            amountElement.textContent = amountText;
+            progressBarElement.style.width = `${progress}%`;
+        }
+
+        // Update Unfilled Value
+        const valueElement = card.querySelector('.unfilled-value');
+        if (valueElement) {
+            const unfilledValue = (parseFloat(amount) - parseFloat(filled)) * parseFloat(price);
+            valueElement.textContent = unfilledValue.toFixed(orderDecimalPlaces);
+        }
     }
 
     function updateLogsList() {
@@ -530,14 +649,14 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="info-row">
                 <span class="info-label">Amount:</span>
-                <span class="info-value">${amountText}</span>
+                <span class="info-value amount-value">${amountText}</span>
             </div>
             <div class="progress-bar-container">
                 <div class="progress-bar" style="width: ${progress}%;"></div>
             </div>
             <div class="info-row">
                 <span class="info-label">Value:</span>
-                <span class="info-value">${unfilledValue.toFixed(orderDecimalPlaces)}</span>
+                <span class="info-value unfilled-value">${unfilledValue.toFixed(orderDecimalPlaces)}</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Date:</span>
@@ -551,66 +670,58 @@ document.addEventListener("DOMContentLoaded", () => {
         const baseSymbol = symbol.includes('/') ? symbol.split('/')[0] : symbol;
         const exchange = data.exchange;
         const price = Number.isFinite(parseFloat(data.price)) ? parseFloat(data.price) : 0;
-        const free = Number.isFinite(parseFloat(data.free)) ? parseFloat(data.free) : 0;
-        const locked = Number.isFinite(parseFloat(data.locked)) ? parseFloat(data.locked) : 0;
         const value = Number.isFinite(parseFloat(data.value)) ? parseFloat(data.value) : 0;
 
-        // 거래소별 소수점 자리수 가져오기 (기본값은 3)
         const decimalPlaces = valueFormats[exchange] ?? 3;
         
-        const totalAmount = free + locked;
-        const lockedAmountHtml = locked > 1e-8 ? `<p class="locked">Locked: ${parseFloat(locked.toFixed(8))}</p>` : '';
-        
         let avgBuyPriceHtml;
+        let roiText = '-';
+        let roiClass = '';
+        let avgPriceText = '-';
+
         if (data.avg_buy_price && Number.isFinite(parseFloat(data.avg_buy_price))) {
             const avg_buy_price = parseFloat(data.avg_buy_price);
-            const price = Number.isFinite(parseFloat(data.price)) ? parseFloat(data.price) : 0;
-            const profitPercent = avg_buy_price > 0 ? ((price - avg_buy_price) / avg_buy_price) * 100 : 0;
-            const profitClass = profitPercent >= 0 ? 'profit-positive' : 'profit-negative';
-            avgBuyPriceHtml = `
-                <div class="info-row">
-                    <span class="info-label">Avg. Price:</span>
-                    <span class="info-value">${parseFloat(avg_buy_price.toPrecision(8))}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">ROI:</span>
-                    <span class="info-value ${profitClass}">${profitPercent.toFixed(2)}%</span>
-                </div>
-            `;
-        } else {
-            avgBuyPriceHtml = `
-                <div class="info-row">
-                    <span class="info-label">Avg. Price:</span>
-                    <span class="info-value">-</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">ROI:</span>
-                    <span class="info-value">-</span>
-                </div>
-            `;
+            const currentPrice = Number.isFinite(parseFloat(data.price)) ? parseFloat(data.price) : 0;
+            const profitPercent = avg_buy_price > 0 ? ((currentPrice - avg_buy_price) / avg_buy_price) * 100 : 0;
+            
+            avgPriceText = parseFloat(avg_buy_price.toPrecision(8));
+            roiText = `${profitPercent.toFixed(2)}%`;
+            roiClass = profitPercent >= 0 ? 'profit-positive' : 'profit-negative';
         }
 
         let priceChangeSpan = '';
+        let priceChangeClass = '';
+        let priceChangeText = '';
         if (data.price_change_percent !== undefined) {
             const change = parseFloat(data.price_change_percent);
-            const changeClass = change >= 0 ? 'profit-positive' : 'profit-negative';
-            priceChangeSpan = ` <span class="${changeClass}">(${change.toFixed(2)}%)</span>`;
+            priceChangeClass = change >= 0 ? 'profit-positive' : 'profit-negative';
+            priceChangeText = `(${change.toFixed(2)}%)`;
         }
 
         return `
             <h2>${baseSymbol}</h2>
             <div class="info-row">
                 <span class="info-label">Price:</span>
-                <span class="info-value">${parseFloat(price.toPrecision(8))}${priceChangeSpan}</span>
+                <span class="info-value">
+                    <span class="price-value">${parseFloat(price.toPrecision(8))}</span>
+                    <span class="price-change-percent ${priceChangeClass}">${priceChangeText}</span>
+                </span>
             </div>
-            ${avgBuyPriceHtml}
+            <div class="info-row">
+                <span class="info-label">Avg. Price:</span>
+                <span class="info-value avg-price-value">${avgPriceText}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">ROI:</span>
+                <span class="info-value roi-value ${roiClass}">${roiText}</span>
+            </div>
             <div class="info-row value" data-value="${value.toFixed(decimalPlaces)}">
                 <span class="info-label">Value:</span>
-                <span class="info-value">${value.toFixed(decimalPlaces)}</span>
+                <span class="info-value value-text">${value.toFixed(decimalPlaces)}</span>
             </div>
             <div class="info-row share">
                 <span class="info-label">Share:</span>
-                <span class="info-value">-</span>
+                <span class="info-value share-value">-</span>
             </div>
         `;
     }
