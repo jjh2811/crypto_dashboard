@@ -39,7 +39,6 @@ class OrderManager:
                     'amount': float(amount),
                     'filled': float(filled),
                     'value': float(price * (amount - filled)), # 미체결 수량 기준 가치
-                    'quote_currency': self.quote_currency,
                     'timestamp': order.get('timestamp'),
                     'status': order.get('status')
                 }
@@ -122,7 +121,6 @@ class OrderManager:
                 'amount': float(amount),
                 'filled': float(new_filled),
                 'value': float(price * (amount - new_filled)),
-                'quote_currency': self.quote_currency,
                 'timestamp': order.get('timestamp'),
                 'status': status
             }

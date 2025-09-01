@@ -557,9 +557,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function updateOrderCard(card, order, currentPrice) {
         // This function updates an existing order card with new data
-        const { amount, filled, price, side } = order;
-        const quoteCurrency = order.quote_currency || (order.symbol.includes('/') ? order.symbol.split('/')[1] : 'USDT');
-        const orderDecimalPlaces = valueFormats[quoteCurrency.toLowerCase()] ?? 3;
+        const { amount, filled, price, side, exchange } = order;
+        const orderDecimalPlaces = valueFormats[exchange] ?? 3;
 
         // Update Price Difference
         const priceDiffElement = card.querySelector('.price-diff-value');
@@ -674,7 +673,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const sideClass = side === 'BUY' ? 'side-buy' : 'side-sell';
         const orderDate = new Date(order.timestamp).toLocaleString();
         
-        const quoteCurrency = order.quote_currency || (order.symbol.includes('/') ? order.symbol.split('/')[1] : 'USDT');
+        // Correctly derive market from the symbol first.
+        let marketCurrencyForDisplay;
+        if (order.symbol && order.symbol.includes('/')) {
+            marketCurrencyForDisplay = order.symbol.split('/')[1];
+        } else {
+            marketCurrencyForDisplay = '???';
+        }
         const baseSymbol = order.symbol.includes('/') ? order.symbol.split('/')[0] : order.symbol;
 
         let priceDiffText = '-';
@@ -712,8 +717,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const unfilledValue = (amount - filled) * price;
 
-        // 주문 카드의 value 표시를 위한 decimal places
-        const orderDecimalPlaces = valueFormats[quoteCurrency.toLowerCase()] ?? 3;
+        // 주문 카드의 value 표시를 위한 decimal places (Now follows the exchange's setting)
+        const orderDecimalPlaces = valueFormats[order.exchange] ?? 3;
 
         return `
             <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -730,7 +735,7 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="info-row">
                 <span class="info-label">Market:</span>
-                <span class="info-value">${quoteCurrency}</span>
+                <span class="info-value">${marketCurrencyForDisplay}</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Diff:</span>
