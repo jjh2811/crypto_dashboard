@@ -80,40 +80,22 @@ class BalanceManager:
                 if not self.testnet or (asset in self.whitelist or asset == self.quote_currency):
                     tg.create_task(process_single_asset(asset, total_amount))
 
-    def create_balance_update_message(self, symbol: str, balance_data: Dict[str, Any]) -> Dict[str, Any]:
-        """잔고 정보로부터 클라이언트에게 보낼 업데이트 메시지를 생성합니다."""
-        price = Decimal(str(balance_data.get('price', '0')))
+    def create_portfolio_update_message(self, symbol: str, balance_data: Dict[str, Any]) -> Dict[str, Any]:
+        """포트폴리오 정보로부터 클라이언트에게 보낼 업데이트 메시지를 생성합니다."""
         free_amount = balance_data.get('free', Decimal('0'))
         locked_amount = balance_data.get('locked', Decimal('0'))
-        total_amount = free_amount + locked_amount
-        value = price * total_amount
         avg_buy_price = balance_data.get('avg_buy_price')
         realised_pnl = balance_data.get('realised_pnl')
 
-        unrealised_pnl = None
-        if avg_buy_price is not None and price > 0:
-            unrealised_pnl = (price - avg_buy_price) * total_amount
-
         message = {
-            'type': 'balance_update',
+            'type': 'portfolio_update',
             'exchange': self.name,
-            'symbol': f"{symbol}/{self.quote_currency}",
-            'price': float(price),
+            'symbol': symbol,
             'free': float(free_amount),
             'locked': float(locked_amount),
-            'value': float(value),
             'avg_buy_price': float(avg_buy_price) if avg_buy_price is not None else None,
             'realised_pnl': float(realised_pnl) if realised_pnl is not None else None,
-            'unrealised_pnl': float(unrealised_pnl) if unrealised_pnl is not None else None,
         }
-
-        reference_prices = self.app.get('reference_prices', {})
-        if reference_prices and self.name in reference_prices and symbol in reference_prices[self.name]:
-            ref_price = Decimal(str(reference_prices[self.name][symbol]))
-            if ref_price > 0:
-                price_change_percent = (price - ref_price) / ref_price * 100
-                message['price_change_percent'] = float(price_change_percent)
-
         return message
 
     def handle_zero_balance(self, asset: str) -> None:
@@ -129,7 +111,7 @@ class BalanceManager:
             self.balances_cache[asset]['total_amount'] = Decimal('0')
             
             balance_data = self.balances_cache.get(asset, {})
-            update_message = self.create_balance_update_message(asset, balance_data)
+            update_message = self.create_portfolio_update_message(asset, balance_data)
             asyncio.create_task(self.app['broadcast_message'](update_message))
         
         # follow 목록에 없으면 캐시에서 완전히 제거
@@ -193,7 +175,7 @@ class BalanceManager:
         self.logger.info(f"Average price for {asset} updated to {new_avg_price} after buy.")
 
         # 업데이트된 잔고 정보 브로드캐스트
-        update_message = self.create_balance_update_message(asset, balances)
+        update_message = self.create_portfolio_update_message(asset, balances)
         await self.app['broadcast_message'](update_message)
 
     async def update_realized_pnl_on_sell(self, asset: str, filled_amount: Decimal, average_price: Decimal) -> None:
@@ -221,5 +203,5 @@ class BalanceManager:
         self.logger.info(f"Realized PnL for {asset} updated by {profit}. Total: {balances['realised_pnl']}")
 
         # 업데이트된 잔고 정보 브로드캐스트
-        update_message = self.create_balance_update_message(asset, balances)
+        update_message = self.create_portfolio_update_message(asset, balances)
         await self.app['broadcast_message'](update_message)

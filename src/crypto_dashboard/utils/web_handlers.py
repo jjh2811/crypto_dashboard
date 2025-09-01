@@ -74,13 +74,14 @@ async def handle_websocket(request):
             format_message = {
                 'type': 'value_format',
                 'exchange': exchange_name,
-                'value_decimal_places': decimal_places
+                'value_decimal_places': decimal_places,
+                'quote_currency': exchange.quote_currency
             }
             await ws.send_json(format_message)
 
             # 잔고 데이터 전송
             for symbol, data in exchange.balance_manager.balances_cache.items():
-                update_message = exchange.create_balance_update_message(symbol, data)
+                update_message = exchange.balance_manager.create_portfolio_update_message(symbol, data)
                 await ws.send_json(update_message)
 
             # 주문 데이터 전송

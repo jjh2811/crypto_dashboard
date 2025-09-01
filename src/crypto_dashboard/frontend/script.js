@@ -23,6 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let activeExchange = '';
     let followCoins = {};  // follow 코인 캐시: {exchange: Set(coins)}
     let valueFormats = {};  // value 소수점 포맷: {exchange: integer}
+    let exchangeInfo = {}; // quote_currency 등 거래소 정보 저장
 
     const modal = document.getElementById("details-modal");
     const closeButton = document.querySelector(".close-button");
@@ -65,13 +66,49 @@ document.addEventListener("DOMContentLoaded", () => {
                     followCoins[exchange] = new Set(follows);
                     console.log(`Received follow coins for ${exchange}:`, follows);
                 } else if (data.type === 'value_format') {
-                    const { exchange, value_decimal_places } = data;
+                    const { exchange, value_decimal_places, quote_currency } = data;
                     valueFormats[exchange] = value_decimal_places;
-                    console.log(`Received value format for ${exchange}:`, value_decimal_places);
-                } else if (data.type === 'balance_update') {
-                    updateCryptoCard(data);
+                    if (!exchangeInfo[exchange]) exchangeInfo[exchange] = {};
+                    exchangeInfo[exchange].quoteCurrency = quote_currency;
+                    console.log(`Received config for ${exchange}:`, { value_decimal_places, quote_currency });
+
+                    // Hardcode the price of the quote currency to 1
+                    if (quote_currency) {
+                        const marketSymbol = `${quote_currency}/${quote_currency}`;
+                        currentPrices[marketSymbol] = 1.0;
+                    }
+                } else if (data.type === 'portfolio_update') {
+                    const { symbol, exchange, free, locked, avg_buy_price, realised_pnl } = data; // symbol is "BTC"
+                    const quoteCurrency = exchangeInfo[exchange]?.quoteCurrency;
+                    if (!quoteCurrency) return;
+
+                    const marketSymbol = `${symbol}/${quoteCurrency}`;
+                    const uniqueId = `${exchange}_${marketSymbol}`;
+                    const card = document.getElementById(uniqueId);
+
+                    // Combine portfolio data with the latest price to calculate derived values
+                    const price = currentPrices[marketSymbol] || (card ? parseFloat(card.dataset.price) : 0);
+                    const value = price * (parseFloat(free) + parseFloat(locked));
+
+                    const renderData = {
+                        symbol: marketSymbol, // Full symbol for rendering
+                        exchange,
+                        free,
+                        locked,
+                        avg_buy_price,
+                        realised_pnl,
+                        price,
+                        value,
+                        // Preserve price_change_percent if it exists
+                        price_change_percent: card ? card.dataset.price_change_percent : undefined
+                    };
+
+                    renderCryptoCard(renderData);
                 } else if (data.type === 'remove_holding') {
-                    const uniqueId = `${data.exchange}_${data.symbol}`;
+                    const quoteCurrency = exchangeInfo[data.exchange]?.quoteCurrency;
+                    if (!quoteCurrency) return;
+                    const marketSymbol = `${data.symbol}/${quoteCurrency}`;
+                    const uniqueId = `${data.exchange}_${marketSymbol}`;
                     const card = document.getElementById(uniqueId);
                     if (card) {
                         card.remove();
@@ -82,7 +119,23 @@ document.addEventListener("DOMContentLoaded", () => {
                     updateOrdersList();
                 } else if (data.type === 'price_update') {
                     currentPrices[data.symbol] = parseFloat(data.price);
-                    updatePriceDiffs();
+                    updatePriceDiffs(); // Update orders list with new price diff
+
+                    // Also trigger a re-render for the main crypto card
+                    const uniqueId = `${data.exchange}_${data.symbol}`;
+                    const card = document.getElementById(uniqueId);
+                    if (card) {
+                        const free = parseFloat(card.dataset.free || 0);
+                        const locked = parseFloat(card.dataset.locked || 0);
+                        const value = data.price * (free + locked);
+
+                        const renderData = {
+                            ...card.dataset, // Preserve all existing data
+                            price: data.price,
+                            value: value,
+                        };
+                        renderCryptoCard(renderData);
+                    }
                 } else if (data.type === 'log') {
                     cachedLogs.unshift(data);
                     updateLogsList();
@@ -259,13 +312,58 @@ document.addEventListener("DOMContentLoaded", () => {
         updateLogsList();
     }
 
+    // Handles balance_update messages
     function updateCryptoCard(data) {
-        const { symbol, price, exchange, value, avg_buy_price, price_change_percent } = data;
+        const { symbol, exchange, free, locked } = data; // symbol is now "BTC"
+        const quoteCurrency = exchangeInfo[exchange]?.quoteCurrency;
+        if (!quoteCurrency) {
+            console.error(`Quote currency for exchange ${exchange} is not available.`);
+            return;
+        }
+        const marketSymbol = `${symbol}/${quoteCurrency}`;
+        const uniqueId = `${exchange}_${marketSymbol}`;
+        const card = document.getElementById(uniqueId);
+
+        // Combine balance data with the latest price from currentPrices
+        const price = currentPrices[marketSymbol] || (card ? parseFloat(card.dataset.price) : 0);
+        const value = price * (parseFloat(free) + parseFloat(locked));
+
+        // Preserve other details that don't come in the balance_update message
+        const avg_buy_price = card ? card.dataset.avg_buy_price : null;
+        const realised_pnl = card ? card.dataset.realised_pnl : null;
+        const price_change_percent = card ? card.dataset.price_change_percent : undefined;
+
+        const renderData = {
+            ...data,
+            symbol: marketSymbol, // Use the full market symbol for rendering
+            price,
+            value,
+            avg_buy_price,
+            realised_pnl,
+            price_change_percent
+        };
+
+        renderCryptoCard(renderData);
+    }
+
+    // Renders or updates the crypto card DOM based on a complete data object
+    function renderCryptoCard(data) {
+        const { symbol, price, exchange, value, avg_buy_price, free, locked, price_change_percent } = data; // symbol is "BTC/USDT"
         const uniqueId = `${exchange}_${symbol}`;
-        currentPrices[symbol] = parseFloat(price);
         let card = document.getElementById(uniqueId);
 
         const decimalPlaces = valueFormats[exchange] ?? 3;
+
+        // Calculate Unrealized PnL and ROI here
+        let unrealised_pnl = null;
+        let roi = null;
+        const avgPrice = parseFloat(avg_buy_price);
+        const currentPrice = parseFloat(price);
+        if (avgPrice > 0) {
+            const totalAmount = parseFloat(free || 0) + parseFloat(locked || 0);
+            unrealised_pnl = (currentPrice - avgPrice) * totalAmount;
+            roi = (unrealised_pnl / (avgPrice * totalAmount)) * 100;
+        }
 
         if (!card) {
             // Card does not exist, create it for the first time.
@@ -274,57 +372,60 @@ document.addEventListener("DOMContentLoaded", () => {
             card.className = "crypto-card";
             card.innerHTML = createCryptoCardHTML(data);
             cryptoContainer.appendChild(card);
-        } else {
-            // Card exists, update only the necessary parts.
-            const priceElement = card.querySelector(".price-value");
-            const priceChangeElement = card.querySelector(".price-change-percent");
-            const avgPriceElement = card.querySelector(".avg-price-value");
-            const roiElement = card.querySelector(".roi-value");
-            const valueContainer = card.querySelector(".value");
-            const valueElement = card.querySelector(".value-text");
-
-            // Update Price and Price Change
-            if (priceElement) priceElement.textContent = parseFloat(price.toPrecision(8));
-            if (priceChangeElement) {
-                if (price_change_percent !== undefined) {
-                    const change = parseFloat(price_change_percent);
-                    const changeClass = change >= 0 ? 'profit-positive' : 'profit-negative';
-                    priceChangeElement.className = `price-change-percent ${changeClass}`;
-                    priceChangeElement.textContent = `(${change.toFixed(2)}%)`;
-                } else {
-                    priceChangeElement.textContent = '';
-                }
-            }
-
-            // Update Avg. Price and ROI
-            if (avg_buy_price && Number.isFinite(parseFloat(avg_buy_price))) {
-                const avgPrice = parseFloat(avg_buy_price);
-                const currentPrice = Number.isFinite(parseFloat(price)) ? parseFloat(price) : 0;
-                const profitPercent = avgPrice > 0 ? ((currentPrice - avgPrice) / avgPrice) * 100 : 0;
-                const profitClass = profitPercent >= 0 ? 'profit-positive' : 'profit-negative';
-
-                if (avgPriceElement) avgPriceElement.textContent = parseFloat(avgPrice.toPrecision(8));
-                if (roiElement) {
-                    roiElement.className = `info-value roi-value ${profitClass}`;
-                    roiElement.textContent = `${profitPercent.toFixed(2)}%`;
-                }
-            } else {
-                if (avgPriceElement) avgPriceElement.textContent = '-';
-                if (roiElement) {
-                    roiElement.className = 'info-value roi-value';
-                    roiElement.textContent = '-';
-                }
-            }
-
-            // Update Value
-            if (valueContainer) valueContainer.dataset.value = parseFloat(value).toFixed(decimalPlaces);
-            if (valueElement) valueElement.textContent = parseFloat(value).toFixed(decimalPlaces);
         }
 
+        // Card exists, update only the necessary parts.
+        const priceElement = card.querySelector(".price-value");
+        const priceChangeElement = card.querySelector(".price-change-percent");
+        const avgPriceElement = card.querySelector(".avg-price-value");
+        const roiElement = card.querySelector(".roi-value");
+        const valueContainer = card.querySelector(".value");
+        const valueElement = card.querySelector(".value-text");
+
+        // Update Price and Price Change
+        if (priceElement) priceElement.textContent = parseFloat(price).toPrecision(8);
+        if (priceChangeElement) {
+            if (price_change_percent !== undefined && price_change_percent !== null) {
+                const change = parseFloat(price_change_percent);
+                const changeClass = change >= 0 ? 'profit-positive' : 'profit-negative';
+                priceChangeElement.className = `price-change-percent ${changeClass}`;
+                priceChangeElement.textContent = `(${change.toFixed(2)}%)`;
+            } else {
+                priceChangeElement.textContent = '';
+            }
+        }
+
+        // Update Avg. Price and ROI
+        if (avgPrice > 0) {
+            if (avgPriceElement) avgPriceElement.textContent = parseFloat(avgPrice.toPrecision(8));
+            if (roiElement) {
+                const profitClass = roi >= 0 ? 'profit-positive' : 'profit-negative';
+                roiElement.className = `info-value roi-value ${profitClass}`;
+                roiElement.textContent = `${roi.toFixed(2)}%`;
+            }
+        } else {
+            if (avgPriceElement) avgPriceElement.textContent = '-';
+            if (roiElement) {
+                roiElement.className = 'info-value roi-value';
+                roiElement.textContent = '-';
+            }
+        }
+
+        // Update Value
+        if (valueContainer) valueContainer.dataset.value = parseFloat(value).toFixed(decimalPlaces);
+        if (valueElement) valueElement.textContent = parseFloat(value).toFixed(decimalPlaces);
+        
         // Update dataset for modal and other interactions
         Object.keys(data).forEach(key => {
-            card.dataset[key] = data[key];
+            if (data[key] !== null && data[key] !== undefined) {
+                card.dataset[key] = data[key];
+            }
         });
+        // Store calculated unrealised_pnl in dataset for the modal
+        if (unrealised_pnl !== null) {
+            card.dataset.unrealised_pnl = unrealised_pnl;
+        }
+
 
         // Update styling for followed zero-balance coins
         const totalAmount = parseFloat(card.dataset.free || 0) + parseFloat(card.dataset.locked || 0);
@@ -736,6 +837,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const total = free + locked;
         const percentage = total > 0 ? ((free / total) * 100).toFixed(2) : 0;
         const realised_pnl = parseFloat(dataset.realised_pnl);
+        // Use the pre-calculated unrealised_pnl from the dataset
         const unrealised_pnl = parseFloat(dataset.unrealised_pnl);
 
         const balanceDetailsContainer = document.getElementById("modal-crypto-balance-details");

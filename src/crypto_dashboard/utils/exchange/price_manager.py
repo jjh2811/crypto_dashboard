@@ -51,23 +51,18 @@ class PriceManager:
         if price <= 0:
             return
 
-        # 보유/관심 자산인 경우, 전체 잔고 메시지 전송
+        # 1. 모든 추적 자산에 대해 price_update 메시지를 항상 전송합니다.
+        update_message = {
+            'type': 'price_update',
+            'exchange': self.name,
+            'symbol': symbol,
+            'price': float(price)
+        }
+        await self.app['broadcast_message'](update_message)
+
+        # 2. 만약 보유 자산이라면, 백엔드 내부 캐시에도 가격을 업데이트합니다.
         if asset in self.balance_manager.balances_cache:
             self.balance_manager.update_price(asset, price)
-            balance_data = self.balance_manager.balances_cache[asset]
-            update_message = self.balance_manager.create_balance_update_message(asset, balance_data)
-            await self.app['broadcast_message'](update_message)
-
-        # 보유/관심 자산이 아닌 경우 (예: 미체결 주문), 가격 정보만 전송
-        else:
-            self.logger.debug(f"Sending price-only update for non-portfolio asset {asset}.")
-            update_message = {
-                'type': 'price_update',
-                'exchange': self.name,
-                'symbol': symbol,
-                'price': float(price)
-            }
-            await self.app['broadcast_message'](update_message)
 
     async def watch_tickers_loop(self, symbols: List[str]) -> None:
         """가격 실시간 감시 루프"""

@@ -52,7 +52,7 @@ class EventHandler:
                         # 변경된 잔고 즉시 브로드캐스트
                         updated_balance = self.balance_manager.balances_cache.get(asset)
                         if updated_balance:
-                            message = self.balance_manager.create_balance_update_message(asset, updated_balance)
+                            message = self.balance_manager.create_portfolio_update_message(asset, updated_balance)
                             asyncio.create_task(self.coordinator.app['broadcast_message'](message))
 
                 # watch_balance가 단일 자산 변경을 반환하는 경우 (e.g. binance)
@@ -70,7 +70,7 @@ class EventHandler:
                     # 변경된 잔고 즉시 브로드캐스트
                     updated_balance = self.balance_manager.balances_cache.get(asset)
                     if updated_balance:
-                        message = self.balance_manager.create_balance_update_message(asset, updated_balance)
+                        message = self.balance_manager.create_portfolio_update_message(asset, updated_balance)
                         asyncio.create_task(self.coordinator.app['broadcast_message'](message))
 
             except asyncio.CancelledError:
