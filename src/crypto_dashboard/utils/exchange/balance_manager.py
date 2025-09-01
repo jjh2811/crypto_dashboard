@@ -97,7 +97,7 @@ class BalanceManager:
         message = {
             'type': 'balance_update',
             'exchange': self.name,
-            'symbol': symbol,
+            'symbol': f"{symbol}/{self.quote_currency}",
             'price': float(price),
             'free': float(free_amount),
             'locked': float(locked_amount),
@@ -141,7 +141,7 @@ class BalanceManager:
             self.logger.info(f"Asset {asset} balance is zero and not followed. Removing from balance cache.")
             del self.balances_cache[asset]
             
-            remove_message = {'type': 'remove_holding', 'symbol': asset, 'exchange': self.name}
+            remove_message = {'type': 'remove_holding', 'symbol': f"{asset}/{self.quote_currency}", 'exchange': self.name}
             asyncio.create_task(self.app['broadcast_message'](remove_message))
 
         # 추적 자산 목록 업데이트 및 감시 루프 재시작 요청

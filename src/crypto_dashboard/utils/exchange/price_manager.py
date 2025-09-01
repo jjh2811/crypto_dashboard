@@ -33,7 +33,7 @@ class PriceManager:
                 asset = symbol.split('/')[0]
                 price = ticker.get('last')
                 if price is not None:
-                    await self._update_asset_price(asset, Decimal(str(price)))
+                    await self._update_asset_price(asset, symbol, Decimal(str(price)))
         except Exception as e:
             self.logger.warning(f"Batch fetch_tickers failed: {e}. Falling back to individual fetches.")
             for asset in assets_to_fetch:
@@ -42,11 +42,11 @@ class PriceManager:
                     ticker = await self.exchange.fetch_ticker(symbol)
                     price = ticker.get('last')
                     if price is not None:
-                        await self._update_asset_price(asset, Decimal(str(price)))
+                        await self._update_asset_price(asset, symbol, Decimal(str(price)))
                 except Exception as e_single:
                     self.logger.warning(f"Failed to fetch price for {asset}: {e_single}")
 
-    async def _update_asset_price(self, asset: str, price: Decimal) -> None:
+    async def _update_asset_price(self, asset: str, symbol: str, price: Decimal) -> None:
         """자산 가격 업데이트 및 브로드캐스트"""
         if price <= 0:
             return
@@ -64,7 +64,7 @@ class PriceManager:
             update_message = {
                 'type': 'price_update',
                 'exchange': self.name,
-                'symbol': asset,
+                'symbol': symbol,
                 'price': float(price)
             }
             await self.app['broadcast_message'](update_message)
@@ -76,13 +76,15 @@ class PriceManager:
             try:
                 tickers = await self.exchange.watch_tickers(symbols)
                 for symbol, ticker in tickers.items():
-                    asset = symbol.split('/')[0]
                     price = ticker.get('last')
-
-                    if not asset or price is None:
+                    if price is None:
+                        continue
+                    
+                    asset = symbol.split('/')[0]
+                    if not asset:
                         continue
 
-                    await self._update_asset_price(asset, Decimal(str(price)))
+                    await self._update_asset_price(asset, symbol, Decimal(str(price)))
 
             except asyncio.CancelledError:
                 self.logger.info("Ticker watch loop cancelled.")
@@ -117,7 +119,7 @@ class PriceManager:
             if price is not None:
                 price_decimal = Decimal(str(price))
                 # 조회한 가격을 캐시에 업데이트하여 향후 활용
-                await self._update_asset_price(coin_symbol, price_decimal)
+                await self._update_asset_price(coin_symbol, market_symbol, price_decimal)
                 return price_decimal
             return None
         except Exception as e:

@@ -279,7 +279,8 @@ document.addEventListener("DOMContentLoaded", () => {
         // Follow 코인에 대한 스타일 적용 (캐시된 정보 활용)
         const totalAmount = parseFloat(card.dataset.free || 0) + parseFloat(card.dataset.locked || 0);
         const isZeroBalance = totalAmount === 0;
-        const is_follow = followCoins[exchange]?.has(symbol) || false;
+        const baseAsset = symbol.split('/')[0];
+        const is_follow = followCoins[exchange]?.has(baseAsset) || false;
 
         card.classList.toggle('follow-zero-balance', is_follow && isZeroBalance);
 
@@ -343,8 +344,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const order = cachedOrders.find(o => o.id.toString() === orderId);
             if (!order) return;
 
-            const baseSymbol = order.symbol.replace('USDT', '').replace('/', '');
-            const currentPrice = currentPrices[baseSymbol];
+            const currentPrice = currentPrices[order.symbol];
             const priceDiffElement = card.querySelector('.price-diff-value');
 
             if (currentPrice && priceDiffElement) {
@@ -387,8 +387,7 @@ document.addEventListener("DOMContentLoaded", () => {
             orderCard.className = "crypto-card";
             orderCard.dataset.orderId = order.id;
             orderCard.dataset.exchange = order.exchange;
-            const baseSymbol = order.symbol.replace('USDT', '').replace('/', '');
-            const currentPrice = currentPrices[baseSymbol];
+            const currentPrice = currentPrices[order.symbol];
 
             orderCard.innerHTML = createOrderCardHTML(order, currentPrice);
             ordersContainer.appendChild(orderCard);
@@ -463,12 +462,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function createOrderCardHTML(order, currentPrice) {
-        const baseSymbol = order.symbol.replace('USDT', '').replace('/', '');
         const side = (order.side || '').toUpperCase();
         const sideClass = side === 'BUY' ? 'side-buy' : 'side-sell';
         const orderDate = new Date(order.timestamp).toLocaleString();
         
-        const quoteCurrency = order.quote_currency || 'USDT';
+        const quoteCurrency = order.quote_currency || (order.symbol.includes('/') ? order.symbol.split('/')[1] : 'USDT');
+        const baseSymbol = order.symbol.includes('/') ? order.symbol.split('/')[0] : order.symbol;
 
         let priceDiffText = '-';
         let diffClass = '';
@@ -549,6 +548,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function createCryptoCardHTML(data) {
         const symbol = data.symbol || 'Unknown';
+        const baseSymbol = symbol.includes('/') ? symbol.split('/')[0] : symbol;
         const exchange = data.exchange;
         const price = Number.isFinite(parseFloat(data.price)) ? parseFloat(data.price) : 0;
         const free = Number.isFinite(parseFloat(data.free)) ? parseFloat(data.free) : 0;
@@ -598,7 +598,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         return `
-            <h2>${symbol}</h2>
+            <h2>${baseSymbol}</h2>
             <div class="info-row">
                 <span class="info-label">Price:</span>
                 <span class="info-value">${parseFloat(price.toPrecision(8))}${priceChangeSpan}</span>
@@ -617,8 +617,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function openDetailsModal(dataset) {
         const symbol = dataset.symbol;
+        const baseSymbol = symbol.includes('/') ? symbol.split('/')[0] : symbol;
         const exchange = dataset.exchange;
-        document.getElementById("modal-crypto-name").textContent = symbol;
+        document.getElementById("modal-crypto-name").textContent = baseSymbol;
         const free = parseFloat(dataset.free || 0);
         const locked = parseFloat(dataset.locked || 0);
         const total = free + locked;
