@@ -105,7 +105,6 @@ class BalanceManager:
             'avg_buy_price': float(avg_buy_price) if avg_buy_price is not None else None,
             'realised_pnl': float(realised_pnl) if realised_pnl is not None else None,
             'unrealised_pnl': float(unrealised_pnl) if unrealised_pnl is not None else None,
-            'quote_currency': self.quote_currency
         }
 
         reference_prices = self.app.get('reference_prices', {})
