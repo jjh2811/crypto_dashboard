@@ -85,7 +85,7 @@ async def login(request):
                 COOKIE_NAME,
                 SECRET_TOKEN,
                 httponly=True,
-                secure=False,
+                secure=True,
                 samesite="Strict",
                 max_age=86400
             )
