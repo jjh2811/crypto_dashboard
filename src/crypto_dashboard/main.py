@@ -5,6 +5,7 @@
 import json
 import logging
 import os
+import bcrypt # Add this import
 
 from aiohttp import web
 
@@ -61,7 +62,15 @@ def init_app():
         logger.error("Login password not found in secrets.json under 'login_password' key. Please add it.")
         os._exit(1)
 
-    app['login_password'] = login_password
+    # Check if the password is already hashed (simple check for transition)
+    if not login_password.encode('utf-8').startswith(b'$2b'): # bcrypt hashes start with $2b$
+        logger.warning("Plain text login password found in secrets.json. Hashing it now.")
+        # Hash the password
+        hashed_password = bcrypt.hashpw(login_password.encode('utf-8'), bcrypt.gensalt())
+        app['login_password'] = hashed_password
+    else:
+        # Assume it's already hashed, ensure it's bytes
+        app['login_password'] = login_password.encode('utf-8') if isinstance(login_password, str) else login_password
 
     # 서버 설정 초기화 (모든 초기화 담당)
     from .utils.server_lifecycle import init_server_config

@@ -6,6 +6,7 @@ import os
 import secrets
 from datetime import datetime, timezone
 from aiohttp import web
+import bcrypt # Add this import
 
 # 전역 인증 관련 변수들 (main 모듈에서 공유)
 SECRET_TOKEN = None
@@ -59,8 +60,8 @@ async def login(request):
         password = data.get("password", "")
 
         # 비밀번호 확인 로직을 app에서 가져와야 함
-        expected_password = request.app.get('login_password', '')
-        if password != expected_password:
+        hashed_password = request.app.get('login_password') # This will now be the hashed password (bytes)
+        if not hashed_password or not bcrypt.checkpw(password.encode('utf-8'), hashed_password):
             login_attempts[ip_address] = login_attempts.get(ip_address, 0) + 1
             last_login_attempt[ip_address] = current_time
             if login_attempts[ip_address] >= MAX_LOGIN_ATTEMPTS:
