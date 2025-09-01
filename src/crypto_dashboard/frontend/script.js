@@ -139,7 +139,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                 } else if (data.type === 'log') {
                     cachedLogs.unshift(data);
-                    updateLogsList();
+                    // Only prepend the new log if it belongs to the active exchange
+                    if (data.exchange === activeExchange) {
+                        const logElement = createLogElement(data);
+                        if (logElement) {
+                            logsContainer.prepend(logElement);
+                        }
+                    }
                 } else if (data.type === 'reference_price_info') {
                     updateReferencePriceInfo(data.time);
                 } else if (data.type === 'nlp_trade_confirm') {
@@ -604,46 +610,53 @@ document.addEventListener("DOMContentLoaded", () => {
         logsContainer.innerHTML = "";
         const filteredLogs = cachedLogs.filter(log => log.exchange === activeExchange);
 
+        // Iterate and prepend to show newest logs at the top
         filteredLogs.forEach(data => {
-            const logData = data.message;
-
-            if (logData.status === 'success') {
-                return;
+            const logElement = createLogElement(data);
+            if (logElement) {
+                logsContainer.appendChild(logElement);
             }
-
-            const logElement = document.createElement('p');
-            const now = new Date(data.timestamp);
-            const timestamp = `${now.getMonth() + 1}/${now.getDate()} ${now.toLocaleTimeString()}`;
-
-            let messageText = `[${timestamp}]`;
-            messageText += ` ${logData.status}`;
-
-            if (logData.order_id) {
-                messageText += ` [${logData.order_id}]`;
-            }
-
-            if (logData.symbol) {
-                messageText += ` - ${logData.symbol}`;
-            }
-            if (logData.message) {
-                messageText += ` - ${logData.message}`;
-            }
-            if (logData.side) {
-                messageText += ` (${logData.side})`
-            }
-            if (logData.price) {
-                messageText += ` | Price: ${parseFloat(logData.price.toPrecision(8))}`;
-            }
-            if (logData.amount) {
-                messageText += ` | Amount: ${parseFloat(logData.amount.toPrecision(8))}`;
-            }
-            if (logData.reason) {
-                messageText += ` | Reason: ${logData.reason}`;
-            }
-
-            logElement.textContent = messageText;
-            logsContainer.appendChild(logElement);
         });
+    }
+
+    function createLogElement(data) {
+        const logData = data.message;
+
+        if (logData.status === 'success') {
+            return null; // Do not display success logs
+        }
+
+        const logElement = document.createElement('p');
+        const now = new Date(data.timestamp);
+        const timestamp = `${now.getMonth() + 1}/${now.getDate()} ${now.toLocaleTimeString()}`;
+
+        let messageText = `[${timestamp}]`;
+        messageText += ` ${logData.status}`;
+
+        if (logData.order_id) {
+            messageText += ` [${logData.order_id}]`;
+        }
+        if (logData.symbol) {
+            messageText += ` - ${logData.symbol}`;
+        }
+        if (logData.message) {
+            messageText += ` - ${logData.message}`;
+        }
+        if (logData.side) {
+            messageText += ` (${logData.side})`;
+        }
+        if (logData.price) {
+            messageText += ` | Price: ${formatNumber(parseFloat(logData.price))}`;
+        }
+        if (logData.amount) {
+            messageText += ` | Amount: ${formatNumber(parseFloat(logData.amount))}`;
+        }
+        if (logData.reason) {
+            messageText += ` | Reason: ${logData.reason}`;
+        }
+
+        logElement.textContent = messageText;
+        return logElement;
     }
 
     function formatNumber(num) {
