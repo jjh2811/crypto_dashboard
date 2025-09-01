@@ -49,6 +49,12 @@ class EventHandler:
 
                         self.balance_manager.add_balance(asset, total, free, used)
 
+                        # 변경된 잔고 즉시 브로드캐스트
+                        updated_balance = self.balance_manager.balances_cache.get(asset)
+                        if updated_balance:
+                            message = self.balance_manager.create_balance_update_message(asset, updated_balance)
+                            asyncio.create_task(self.coordinator.app['broadcast_message'](message))
+
                 # watch_balance가 단일 자산 변경을 반환하는 경우 (e.g. binance)
                 elif 'asset' in balance_update:
                     asset = balance_update['asset']
@@ -60,6 +66,12 @@ class EventHandler:
                     total = free + used # 단일 업데이트는 free, used로 total 계산
 
                     self.balance_manager.add_balance(asset, total, free, used)
+
+                    # 변경된 잔고 즉시 브로드캐스트
+                    updated_balance = self.balance_manager.balances_cache.get(asset)
+                    if updated_balance:
+                        message = self.balance_manager.create_balance_update_message(asset, updated_balance)
+                        asyncio.create_task(self.coordinator.app['broadcast_message'](message))
 
             except asyncio.CancelledError:
                 self.logger.info(f"Balance watch loop for {self.name} cancelled.")
