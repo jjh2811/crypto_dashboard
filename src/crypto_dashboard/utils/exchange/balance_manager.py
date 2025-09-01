@@ -173,11 +173,17 @@ class BalanceManager:
             return
 
         balances = self.balances_cache[asset]
-        old_total_amount = balances.get('total_amount', Decimal('0'))
         old_avg_price = balances.get('avg_buy_price')
 
+        # User requirement: If avg_price is None, keep it None even on new buys.
+        if old_avg_price is None:
+            self.logger.info(f"Skipping avg_price update for {asset} because it is None.")
+            return
+
+        old_total_amount = balances.get('total_amount', Decimal('0'))
+
         # 새로운 평균 매수 단가 계산
-        if old_avg_price is None or old_avg_price <= 0 or old_total_amount <= 0:
+        if old_avg_price <= 0 or old_total_amount <= 0:
             new_avg_price = average_price
         else:
             old_cost = old_total_amount * old_avg_price
