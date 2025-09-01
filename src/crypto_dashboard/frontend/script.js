@@ -131,6 +131,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                         const renderData = {
                             ...card.dataset, // Preserve all existing data
+                            symbol: data.symbol,
                             price: data.price,
                             value: value,
                         };
@@ -312,40 +313,6 @@ document.addEventListener("DOMContentLoaded", () => {
         updateLogsList();
     }
 
-    // Handles balance_update messages
-    function updateCryptoCard(data) {
-        const { symbol, exchange, free, locked } = data; // symbol is now "BTC"
-        const quoteCurrency = exchangeInfo[exchange]?.quoteCurrency;
-        if (!quoteCurrency) {
-            console.error(`Quote currency for exchange ${exchange} is not available.`);
-            return;
-        }
-        const marketSymbol = `${symbol}/${quoteCurrency}`;
-        const uniqueId = `${exchange}_${marketSymbol}`;
-        const card = document.getElementById(uniqueId);
-
-        // Combine balance data with the latest price from currentPrices
-        const price = currentPrices[marketSymbol] || (card ? parseFloat(card.dataset.price) : 0);
-        const value = price * (parseFloat(free) + parseFloat(locked));
-
-        // Preserve other details that don't come in the balance_update message
-        const avg_buy_price = card ? card.dataset.avg_buy_price : null;
-        const realised_pnl = card ? card.dataset.realised_pnl : null;
-        const price_change_percent = card ? card.dataset.price_change_percent : undefined;
-
-        const renderData = {
-            ...data,
-            symbol: marketSymbol, // Use the full market symbol for rendering
-            price,
-            value,
-            avg_buy_price,
-            realised_pnl,
-            price_change_percent
-        };
-
-        renderCryptoCard(renderData);
-    }
-
     // Renders or updates the crypto card DOM based on a complete data object
     function renderCryptoCard(data) {
         const { symbol, price, exchange, value, avg_buy_price, free, locked, price_change_percent } = data; // symbol is "BTC/USDT"
@@ -362,7 +329,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (avgPrice > 0) {
             const totalAmount = parseFloat(free || 0) + parseFloat(locked || 0);
             unrealised_pnl = (currentPrice - avgPrice) * totalAmount;
-            roi = (unrealised_pnl / (avgPrice * totalAmount)) * 100;
+            const costBasis = avgPrice * totalAmount;
+            if (costBasis !== 0) {
+                roi = (unrealised_pnl / costBasis) * 100;
+            }
         }
 
         if (!card) {
@@ -370,7 +340,8 @@ document.addEventListener("DOMContentLoaded", () => {
             card = document.createElement("div");
             card.id = uniqueId;
             card.className = "crypto-card";
-            card.innerHTML = createCryptoCardHTML(data);
+            // Pass calculated values to the HTML creation function
+            card.innerHTML = createCryptoCardHTML({ ...data, roi });
             cryptoContainer.appendChild(card);
         }
 
@@ -383,7 +354,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const valueElement = card.querySelector(".value-text");
 
         // Update Price and Price Change
-        if (priceElement) priceElement.textContent = parseFloat(price).toPrecision(8);
+        if (priceElement) priceElement.textContent = formatNumber(currentPrice);
         if (priceChangeElement) {
             if (price_change_percent !== undefined && price_change_percent !== null) {
                 const change = parseFloat(price_change_percent);
@@ -396,8 +367,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         // Update Avg. Price and ROI
-        if (avgPrice > 0) {
-            if (avgPriceElement) avgPriceElement.textContent = parseFloat(avgPrice.toPrecision(8));
+        if (avgPrice > 0 && roi !== null) {
+            if (avgPriceElement) avgPriceElement.textContent = formatNumber(avgPrice);
             if (roiElement) {
                 const profitClass = roi >= 0 ? 'profit-positive' : 'profit-negative';
                 roiElement.className = `info-value roi-value ${profitClass}`;
@@ -412,8 +383,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         // Update Value
-        if (valueContainer) valueContainer.dataset.value = parseFloat(value).toFixed(decimalPlaces);
-        if (valueElement) valueElement.textContent = parseFloat(value).toFixed(decimalPlaces);
+        const formattedValue = parseFloat(value).toLocaleString('en-US', {
+            minimumFractionDigits: decimalPlaces,
+            maximumFractionDigits: decimalPlaces
+        });
+        if (valueContainer) valueContainer.dataset.value = value; // Store raw value
+        if (valueElement) valueElement.textContent = formattedValue;
         
         // Update dataset for modal and other interactions
         Object.keys(data).forEach(key => {
@@ -772,25 +747,22 @@ document.addEventListener("DOMContentLoaded", () => {
         const exchange = data.exchange;
         const price = Number.isFinite(parseFloat(data.price)) ? parseFloat(data.price) : 0;
         const value = Number.isFinite(parseFloat(data.value)) ? parseFloat(data.value) : 0;
+        const roi = Number.isFinite(parseFloat(data.roi)) ? parseFloat(data.roi) : null;
 
         const decimalPlaces = valueFormats[exchange] ?? 3;
         
-        let avgBuyPriceHtml;
-        let roiText = '-';
-        let roiClass = '';
         let avgPriceText = '-';
-
         if (data.avg_buy_price && Number.isFinite(parseFloat(data.avg_buy_price))) {
-            const avg_buy_price = parseFloat(data.avg_buy_price);
-            const currentPrice = Number.isFinite(parseFloat(data.price)) ? parseFloat(data.price) : 0;
-            const profitPercent = avg_buy_price > 0 ? ((currentPrice - avg_buy_price) / avg_buy_price) * 100 : 0;
-            
-            avgPriceText = parseFloat(avg_buy_price.toPrecision(8));
-            roiText = `${profitPercent.toFixed(2)}%`;
-            roiClass = profitPercent >= 0 ? 'profit-positive' : 'profit-negative';
+            avgPriceText = formatNumber(parseFloat(data.avg_buy_price));
         }
 
-        let priceChangeSpan = '';
+        let roiText = '-';
+        let roiClass = '';
+        if (roi !== null) {
+            roiText = `${roi.toFixed(2)}%`;
+            roiClass = roi >= 0 ? 'profit-positive' : 'profit-negative';
+        }
+
         let priceChangeClass = '';
         let priceChangeText = '';
         if (data.price_change_percent !== undefined) {
@@ -799,12 +771,17 @@ document.addEventListener("DOMContentLoaded", () => {
             priceChangeText = `(${change.toFixed(2)}%)`;
         }
 
+        const formattedValue = value.toLocaleString('en-US', {
+            minimumFractionDigits: decimalPlaces,
+            maximumFractionDigits: decimalPlaces
+        });
+
         return `
             <h2>${baseSymbol}</h2>
             <div class="info-row">
                 <span class="info-label">Price:</span>
                 <span class="info-value">
-                    <span class="price-value">${parseFloat(price.toPrecision(8))}</span>
+                    <span class="price-value">${formatNumber(price)}</span>
                     <span class="price-change-percent ${priceChangeClass}">${priceChangeText}</span>
                 </span>
             </div>
@@ -816,9 +793,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 <span class="info-label">ROI:</span>
                 <span class="info-value roi-value ${roiClass}">${roiText}</span>
             </div>
-            <div class="info-row value" data-value="${value.toFixed(decimalPlaces)}">
+            <div class="info-row value" data-value="${value}">
                 <span class="info-label">Value:</span>
-                <span class="info-value value-text">${value.toFixed(decimalPlaces)}</span>
+                <span class="info-value value-text">${formattedValue}</span>
             </div>
             <div class="info-row share">
                 <span class="info-label">Share:</span>
@@ -849,13 +826,17 @@ document.addEventListener("DOMContentLoaded", () => {
             const pnlClass = pnl >= 0 ? 'profit-positive' : 'profit-negative';
             const pnlSign = pnl > 0 ? '+' : '';
             const decimalPlaces = valueFormats[exchange] ?? 3;
-            return `<span class="info-value ${pnlClass}">${pnlSign}${pnl.toFixed(decimalPlaces)}</span>`;
+            const formattedPnl = pnl.toLocaleString('en-US', {
+                minimumFractionDigits: decimalPlaces,
+                maximumFractionDigits: decimalPlaces
+            });
+            return `<span class="info-value ${pnlClass}">${pnlSign}${formattedPnl}</span>`;
         };
 
         balanceDetailsContainer.innerHTML = `
             <div class="info-row">
                 <span class="info-label">Free:</span>
-                <span class="info-value">${parseFloat(free.toFixed(8))} / ${parseFloat(total.toFixed(8))} (${percentage}%)</span>
+                <span class="info-value">${formatNumber(free)} / ${formatNumber(total)} (${percentage}%)</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Unrealised PnL:</span>

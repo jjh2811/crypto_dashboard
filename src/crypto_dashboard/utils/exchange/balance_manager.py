@@ -87,14 +87,28 @@ class BalanceManager:
         avg_buy_price = balance_data.get('avg_buy_price')
         realised_pnl = balance_data.get('realised_pnl')
 
+        # Get decimal places from config for rounding for display
+        exchanges_config = self.app.get('config', {}).get('exchanges', {})
+        decimal_places = exchanges_config.get(self.name, {}).get('value_decimal_places', 3)
+
+        formatted_avg_buy_price = None
+        if avg_buy_price is not None:
+            # Round the Decimal before converting to float for sending.
+            # The internal cache remains at full precision.
+            formatted_avg_buy_price = float(round(avg_buy_price, decimal_places))
+
+        formatted_realised_pnl = None
+        if realised_pnl is not None:
+            formatted_realised_pnl = float(round(realised_pnl, decimal_places))
+
         message = {
             'type': 'portfolio_update',
             'exchange': self.name,
             'symbol': symbol,
             'free': float(free_amount),
             'locked': float(locked_amount),
-            'avg_buy_price': float(avg_buy_price) if avg_buy_price is not None else None,
-            'realised_pnl': float(realised_pnl) if realised_pnl is not None else None,
+            'avg_buy_price': formatted_avg_buy_price,
+            'realised_pnl': formatted_realised_pnl,
         }
         return message
 
