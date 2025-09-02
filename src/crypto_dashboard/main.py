@@ -5,6 +5,7 @@
 import json
 import logging
 import os
+import bcrypt
 
 from aiohttp import web
 
@@ -69,13 +70,18 @@ def init_app():
         logger.error("Login password not found in secrets.json under 'login_password' key.")
         os._exit(1)
 
-    # 비밀번호가 bcrypt 해시인지 확인
-    if not login_password.startswith('$2b$'):
+    # 비밀번호가 유효한 bcrypt 해시인지 확인
+    hashed_password = login_password.encode('utf-8')
+    try:
+        # bcrypt.checkpw는 해시 형식이 유효하지 않으면 ValueError를 발생시킵니다.
+        # 임의의 비밀번호로 확인하여 해시 자체의 유효성만 검사합니다.
+        bcrypt.checkpw(b'some_dummy_password_to_check_hash_validity', hashed_password)
+    except ValueError:
         logger.error("The 'login_password' in secrets.json is not a valid bcrypt hash. "
-                     "Please use the hash_password.py script to generate a hash.")
+                     "Please use the hash_password.py script to generate a valid hash.")
         os._exit(1)
 
-    app['login_password'] = login_password.encode('utf-8')
+    app['login_password'] = hashed_password
 
     # 인증 토큰 설정
     app['SECRET_TOKEN'] = get_secret_token()
