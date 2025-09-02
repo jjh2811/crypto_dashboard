@@ -28,6 +28,7 @@ build-backend = "poetry.core.masonry.api"
 [dependency-groups]
 dev = [
     "autopep8>=2.3.2",
+    "pyright>=1.1.404",
     "pytest>=8.4.1",
     "pytest-aiohttp>=1.1.0",
     "pytest-mock>=3.14.1",
