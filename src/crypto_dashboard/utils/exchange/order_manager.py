@@ -86,11 +86,12 @@ class OrderManager:
             else:
                 self.logger.info(f"Successfully sent cancel request for order {order_id}")
 
-    def update_order(self, order: Dict[str, Any]) -> None:
+    def update_order(self, order: Dict[str, Any]) -> list:
         """주문 업데이트 처리 (웹소켓 이벤트에서 호출)"""
+        tasks = []
         order_id = order.get('id')
         if not order_id:
-            return
+            return []
 
         # 이전 주문 정보 가져오기
         old_order = self.orders_cache.get(order_id, {})
@@ -103,7 +104,7 @@ class OrderManager:
         # 체결량 변화 감지
         trade_amount = new_filled - old_filled
         if trade_amount > 0:
-            asyncio.create_task(self._handle_filled_order(order, trade_amount))
+            tasks.append(asyncio.create_task(self._handle_filled_order(order, trade_amount)))
 
         # 캐시 업데이트 및 브로드캐스트
         if status in ('closed', 'canceled'):
@@ -126,7 +127,7 @@ class OrderManager:
             }
 
         # 프론트엔드에 주문 목록 업데이트 브로드캐스트
-        asyncio.create_task(self.app['broadcast_orders_update'](self.app['exchanges'].get(self.name)))
+        tasks.append(asyncio.create_task(self.app['broadcast_orders_update'](self.app['exchanges'].get(self.name))))
 
         # 로그 브로드캐스트
         log_payload = {
@@ -137,10 +138,12 @@ class OrderManager:
             'price': float(order.get('average') or order.get('price') or '0'),
             'amount': float(trade_amount if trade_amount > 0 else order.get('amount', '0'))
         }
-        asyncio.create_task(self.app['broadcast_log'](log_payload, self.name, self.logger))
+        tasks.append(asyncio.create_task(self.app['broadcast_log'](log_payload, self.name, self.logger)))
 
         # 주문 상태 변경이 추적 자산 목록에 영향을 줄 수 있으므로, 코디네이터에 업데이트 요청
-        asyncio.create_task(self.coordinator.update_tracked_assets_and_restart_watcher())
+        tasks.append(asyncio.create_task(self.coordinator.update_tracked_assets_and_restart_watcher()))
+
+        return tasks
 
 
     async def _handle_filled_order(self, order: Dict[str, Any], trade_amount: Decimal):

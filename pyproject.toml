@@ -28,8 +28,12 @@ build-backend = "poetry.core.masonry.api"
 dev = [
     "autopep8>=2.3.2",
     "pytest>=8.4.1",
+    "pytest-aiohttp>=1.1.0",
     "pytest-mock>=3.14.1",
 ]
 
 [project.scripts]
 dashboard = "crypto_dashboard.main:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
