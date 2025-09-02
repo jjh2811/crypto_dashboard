@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import bcrypt
+from dotenv import load_dotenv
 
 from aiohttp import web
 
@@ -43,6 +44,8 @@ async def csp_middleware(request, handler):
 
 def init_app():
     """애플리케이션 초기화"""
+    load_dotenv()  # .env 파일에서 환경 변수 로드
+
     # 로깅 설정
     logging.basicConfig(
         level=logging.INFO,
@@ -60,14 +63,10 @@ def init_app():
     app.on_shutdown.append(on_shutdown)
     app.on_cleanup.append(on_cleanup)
 
-    # 비밀번호 로드
-    secrets_path = os.path.join(os.path.dirname(__file__), 'secrets.json')
-    with open(secrets_path) as f:
-        secrets_data = json.load(f)
-
-    login_password = secrets_data.get('login_password')
+    # 비밀번호 로드 (환경 변수에서)
+    login_password = os.getenv('LOGIN_PASSWORD')
     if not login_password:
-        logger.error("Login password not found in secrets.json under 'login_password' key.")
+        logger.error("LOGIN_PASSWORD not found in environment variables.")
         os._exit(1)
 
     # 비밀번호가 유효한 bcrypt 해시인지 확인
@@ -77,7 +76,7 @@ def init_app():
         # 임의의 비밀번호로 확인하여 해시 자체의 유효성만 검사합니다.
         bcrypt.checkpw(b'some_dummy_password_to_check_hash_validity', hashed_password)
     except ValueError:
-        logger.error("The 'login_password' in secrets.json is not a valid bcrypt hash. "
+        logger.error("The LOGIN_PASSWORD in your .env file is not a valid bcrypt hash. "
                      "Please use the hash_password.py script to generate a valid hash.")
         os._exit(1)
 

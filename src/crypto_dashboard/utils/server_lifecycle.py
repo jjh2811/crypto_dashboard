@@ -38,10 +38,6 @@ async def on_startup(app):
     app['reference_prices'] = {}
     app['reference_time'] = None
 
-    secrets_path = os.path.join(os.path.dirname(__file__), '..', 'secrets.json')
-    with open(secrets_path) as f:
-        secrets_data = json.load(f)
-
     exchanges_config = config.get('exchanges', {})
     if not exchanges_config:
         logger.error("No exchanges configured in config.json")
@@ -54,17 +50,25 @@ async def on_startup(app):
         try:
             logger.info(f"Preparing to initialize exchange: {exchange_name}")
 
-            api_key_section = f"{exchange_name}_testnet" if exchange_config.get('testnet', {}).get('use', False) else exchange_name
+            is_testnet = exchange_config.get('testnet', {}).get('use', False)
+            
+            # 환경 변수 이름 생성 (e.g., EXCHANGE_BINANCE_API_KEY)
+            base_env_name = f"EXCHANGE_{exchange_name.upper()}"
+            if is_testnet:
+                base_env_name += "_TESTNET"
 
-            if api_key_section not in secrets_data.get('exchanges', {}):
-                logger.error(f"API keys for '{api_key_section}' not found in secrets.json")
+            api_key_env = f"{base_env_name}_API_KEY"
+            secret_key_env = f"{base_env_name}_SECRET_KEY"
+
+            api_key = os.getenv(api_key_env)
+            secret_key = os.getenv(secret_key_env)
+
+            if not api_key or not secret_key:
+                logger.error(f"API keys not found in environment variables for {base_env_name}")
                 continue
 
-            api_key = secrets_data['exchanges'][api_key_section]['api_key']
-            secret_key = secrets_data['exchanges'][api_key_section]['secret_key']
-
-            if f"YOUR_{api_key_section.upper()}" in api_key or f"YOUR_{api_key_section.upper()}" in secret_key:
-                logger.warning(f"Please replace placeholder keys in secrets.json for {api_key_section}.")
+            if f"YOUR_{exchange_name.upper()}" in api_key or f"YOUR_{exchange_name.upper()}" in secret_key:
+                logger.warning(f"Please replace placeholder keys in .env for {base_env_name}.")
                 continue
 
             exchange_instance = ExchangeCoordinator(api_key, secret_key, app, exchange_name)

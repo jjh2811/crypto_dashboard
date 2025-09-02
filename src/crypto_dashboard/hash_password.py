@@ -15,4 +15,4 @@ if __name__ == "__main__":
     plain_password = sys.argv[1]
     hashed_pw = hash_password(plain_password)
     print(f"Hashed Password: {hashed_pw}")
-    print("\nCopy this hashed password into your secrets.json file.")
+    print("\nCopy this hashed password into your .env file for the LOGIN_PASSWORD variable.")
