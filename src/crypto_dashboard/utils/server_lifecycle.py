@@ -10,20 +10,7 @@ import secrets
 from ..exchange_coordinator import ExchangeCoordinator
 
 
-def init_server_config(login_password: str):
-    """서버 설정 초기화"""
-    SECRET_TOKEN = secrets.token_hex(32)
 
-    # 인증 초기화
-    from .auth import init_auth_secrets
-    init_auth_secrets(login_password)
-
-    task_formatting = {
-        'SECRET_TOKEN': SECRET_TOKEN,
-        'login_password': login_password
-    }
-
-    return task_formatting
 
 
 async def on_startup(app):

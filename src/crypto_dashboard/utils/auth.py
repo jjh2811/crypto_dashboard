@@ -17,7 +17,7 @@ login_attempts = {}
 last_login_attempt = {}
 
 
-def init_auth_secrets(login_password: str):
+def init_auth_secrets():
     """인증 관련 설정 초기화"""
     global SECRET_TOKEN, COOKIE_NAME
     SECRET_TOKEN = secrets.token_hex(32)

@@ -5,11 +5,16 @@
 import json
 import logging
 import os
-import bcrypt # Add this import
 
 from aiohttp import web
 
-from .utils.auth import auth_middleware
+from .utils.auth import (
+    auth_middleware,
+    get_secret_token,
+    init_auth_secrets,
+    login,
+    logout,
+)
 from .utils.broadcast import (
     basic_broadcast_log,
     basic_broadcast_message,
@@ -43,8 +48,10 @@ def init_app():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[logging.StreamHandler()]
     )
-
     logger = logging.getLogger("main")
+
+    # 인증 시스템 초기화
+    init_auth_secrets()
 
     # 앱 생성
     app = web.Application(middlewares=[auth_middleware, csp_middleware])
@@ -59,25 +66,18 @@ def init_app():
 
     login_password = secrets_data.get('login_password')
     if not login_password:
-        logger.error("Login password not found in secrets.json under 'login_password' key. Please add it.")
+        logger.error("Login password not found in secrets.json under 'login_password' key.")
         os._exit(1)
 
-    # Check if the password is already hashed (simple check for transition)
-    if not login_password.encode('utf-8').startswith(b'$2b'): # bcrypt hashes start with $2b$
-        logger.warning("Plain text login password found in secrets.json. Hashing it now.")
-        # Hash the password
-        hashed_password = bcrypt.hashpw(login_password.encode('utf-8'), bcrypt.gensalt())
-        app['login_password'] = hashed_password
-    else:
-        # Assume it's already hashed, ensure it's bytes
-        app['login_password'] = login_password.encode('utf-8') if isinstance(login_password, str) else login_password
+    # 비밀번호가 bcrypt 해시인지 확인
+    if not login_password.startswith('$2b$'):
+        logger.error("The 'login_password' in secrets.json is not a valid bcrypt hash. "
+                     "Please use the hash_password.py script to generate a hash.")
+        os._exit(1)
 
-    # 서버 설정 초기화 (모든 초기화 담당)
-    from .utils.server_lifecycle import init_server_config
-    init_server_config(login_password)
+    app['login_password'] = login_password.encode('utf-8')
 
     # 인증 토큰 설정
-    from .utils.auth import get_secret_token
     app['SECRET_TOKEN'] = get_secret_token()
 
     # 브로드캐스트 함수들 준비
@@ -89,8 +89,6 @@ def init_app():
     app.router.add_get('/ws', handle_websocket)
     app.router.add_get('/', http_handler)
     app.router.add_get('/{filename}', http_handler)
-
-    from .utils.auth import login, logout
     app.router.add_get('/login', login)
     app.router.add_post('/login', login)
     app.router.add_get('/logout', logout)
