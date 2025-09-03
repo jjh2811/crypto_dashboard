@@ -116,7 +116,8 @@ async def auth_middleware(request, handler):
     if SECRET_TOKEN is None:
         return web.HTTPFound('/login')
 
-    if token is None or token != SECRET_TOKEN:
+    # Use secrets.compare_digest to prevent timing attacks
+    if token is None or not secrets.compare_digest(token, SECRET_TOKEN):
         return web.HTTPFound('/login')
 
     return await handler(request)
