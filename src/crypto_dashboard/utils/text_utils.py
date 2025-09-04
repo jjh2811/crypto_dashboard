@@ -2,6 +2,28 @@
 텍스트 처리 유틸리티 모듈
 """
 import unicodedata
+import re
+from decimal import Decimal, InvalidOperation
+
+def expand_k_suffix(text: str) -> str:
+    """
+    숫자 뒤에 붙은 'k'를 1000을 곱한 값으로 변환합니다.
+    예: 30k -> 30000, 2.67k -> 2670
+    """
+    def replacer(match):
+        try:
+            number_str = match.group(1)
+            number = Decimal(number_str) * 1000
+            # 정수로 변환 가능한 경우 정수로, 아니면 소수점으로 표현
+            if number == number.to_integral_value():
+                return str(number.to_integral_value())
+            else:
+                return str(number.normalize())
+        except (InvalidOperation, IndexError):
+            return match.group(0) # 변환 실패 시 원본 문자열 반환
+
+    # 숫자와 'k'가 붙어있는 경우 (소수점 포함, 대소문자 구분 없음)
+    return re.sub(r'(\d+(?:\.\d+)?)\s*k(?![a-zA-Z0-9])', replacer, text, flags=re.IGNORECASE)
 
 
 def clean_text(text: str) -> str:

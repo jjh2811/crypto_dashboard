@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation
 import logging
 import re
 from typing import Any, Dict, List, Optional
-from ..text_utils import clean_text, sanitize_input
+from ..text_utils import clean_text, sanitize_input, expand_k_suffix
 
 
 class EntityExtractor:
@@ -104,6 +104,7 @@ class EntityExtractor:
 
     def _extract_amount(self, text: str, is_english: bool) -> Optional[Decimal]:
         """텍스트에서 거래 수량을 추출"""
+        text = expand_k_suffix(text)
         try:
             if is_english:
                 # 영문: 숫자만 추출 (나중에 tokens에서 처리)
@@ -127,6 +128,7 @@ class EntityExtractor:
 
     def _extract_price(self, text: str, is_english: bool) -> Optional[Decimal]:
         """텍스트에서 지정가 가격을 추출"""
+        text = expand_k_suffix(text)
         try:
             if is_english:
                 # 영문: 숫자만 추출 (나중에 tokens에서 처리)
@@ -177,6 +179,7 @@ class EntityExtractor:
 
     def _extract_total_cost(self, text: str, is_english: bool) -> Optional[Decimal]:
         """텍스트에서 총 비용을 추출"""
+        text = expand_k_suffix(text)
         try:
             if is_english:
                 # 영문: "10 usdt", "10krw" 등 '숫자 + 통화 단위' 패턴으로 추출
@@ -263,6 +266,7 @@ class EntityExtractor:
 
     def _process_english_tokens(self, text: str, entities: Dict[str, Any]) -> None:
         """영문 명령어의 토큰 기반 처리"""
+        text = expand_k_suffix(text)
         # order_type과 intent 제거 후 나머지 토큰 추출
         match = re.match(r'^(market|limit)?\s*(buy|sell)\s*', text.lower())
         if match:
