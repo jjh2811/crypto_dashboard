@@ -2,6 +2,7 @@ import logging
 from decimal import Decimal
 import json
 import readline # don't remove this. this is for input()
+import sys
 from src.crypto_dashboard.utils.nlp.entity_extractor import EntityExtractor
 
 # 기본 로거 설정
@@ -36,14 +37,28 @@ def main():
     # EntityExtractor 인스턴스 생성
     try:
         extractor = EntityExtractor(coins=mock_coins, config=mock_config, logger=logger)
-        print("EntityExtractor가 성공적으로 초기화되었습니다.")
-        print("테스트할 주문 문장을 입력하세요. (종료하려면 'exit' 또는 'quit' 입력)")
-        print("-" * 30)
     except Exception as e:
         logger.error(f"EntityExtractor 초기화 중 오류 발생: {e}")
         return
 
-    # 대화형 프롬프트 시작
+    # Decimal 객체를 문자열로 변환하여 JSON 직렬화 지원
+    def decimal_default(obj):
+        if isinstance(obj, Decimal):
+            return str(obj)
+        raise TypeError
+
+    # 매개변수 처리 모드
+    if len(sys.argv) > 1:
+        input_text = " ".join(sys.argv[1:])
+        logger.info(f"Input from arguments: '{input_text}'")
+        entities = extractor.extract_entities(input_text)
+        print(json.dumps(entities, indent=4, default=decimal_default, ensure_ascii=False))
+        return
+
+    # 대화형 모드
+    print("EntityExtractor가 성공적으로 초기화되었습니다.")
+    print("테스트할 주문 문장을 입력하세요. (종료하려면 'exit' 또는 'quit' 입력)")
+    print("-" * 30)
     while True:
         try:
             input_text = input("> ")
@@ -56,12 +71,6 @@ def main():
 
             # 엔티티 추출
             entities = extractor.extract_entities(input_text)
-
-            # Decimal 객체를 문자열로 변환하여 JSON 직렬화 지원
-            def decimal_default(obj):
-                if isinstance(obj, Decimal):
-                    return str(obj)
-                raise TypeError
 
             # 결과 출력
             print(json.dumps(entities, indent=4, default=decimal_default, ensure_ascii=False))
