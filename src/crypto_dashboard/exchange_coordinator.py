@@ -162,17 +162,8 @@ class ExchangeCoordinator:
     async def cancel_all_orders(self) -> None:
         await self.order_manager.cancel_all_orders()
 
-    def create_portfolio_update_message(self, symbol: str, balance_data: Dict[str, Any]) -> Dict[str, Any]:
-        return self.balance_manager.create_portfolio_update_message(symbol, balance_data)
-
-    def get_coins(self) -> List[str]:
-        return self.nlp_trade_manager.get_available_coins()
-
     def is_nlp_ready(self) -> bool:
         return self.nlp_trade_manager.is_ready()
-
-    def get_exchange(self):
-        return self.exchange
 
     # 이벤트 루프들 (웹소켓 감시)
     async def watch_balance_loop(self) -> None:
