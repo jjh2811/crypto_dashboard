@@ -681,6 +681,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (logData.amount) {
             messageText += ` | Amount: ${formatNumber(parseFloat(logData.amount))}`;
         }
+        // 수수료 정보 추가
+        if (logData.fee && logData.fee.cost > 0) {
+            messageText += ` | Fee: ${formatNumber(logData.fee.cost)} ${logData.fee.currency}`;
+        }
         if (logData.reason) {
             messageText += ` | Reason: ${logData.reason}`;
         }

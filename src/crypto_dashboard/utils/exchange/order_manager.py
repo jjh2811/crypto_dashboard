@@ -138,6 +138,10 @@ class OrderManager:
             'price': float(order.get('average') or order.get('price') or '0'),
             'amount': float(trade_amount if trade_amount > 0 else order.get('amount', '0'))
         }
+        # 수수료 정보 추가
+        if 'fee' in order and order['fee'] is not None:
+            log_payload['fee'] = order['fee']
+            
         tasks.append(asyncio.create_task(self.app['broadcast_log'](log_payload, self.name, self.logger)))
 
         # 주문 상태 변경이 추적 자산 목록에 영향을 줄 수 있으므로, 코디네이터에 업데이트 요청
