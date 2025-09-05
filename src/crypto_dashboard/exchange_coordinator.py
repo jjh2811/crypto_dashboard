@@ -162,8 +162,8 @@ class ExchangeCoordinator:
     async def cancel_all_orders(self) -> None:
         await self.order_manager.cancel_all_orders()
 
-    def create_balance_update_message(self, symbol: str, balance_data: Dict[str, Any]) -> Dict[str, Any]:
-        return self.balance_manager.create_balance_update_message(symbol, balance_data)
+    def create_portfolio_update_message(self, symbol: str, balance_data: Dict[str, Any]) -> Dict[str, Any]:
+        return self.balance_manager.create_portfolio_update_message(symbol, balance_data)
 
     def get_coins(self) -> List[str]:
         return self.nlp_trade_manager.get_available_coins()
