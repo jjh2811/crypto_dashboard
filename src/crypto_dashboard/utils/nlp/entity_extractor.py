@@ -257,7 +257,7 @@ class EntityExtractor:
         """주문 타입을 추출"""
         if is_english:
             # 영문: "market" 또는 "limit" 명시적 추출
-            match = re.search(r'^(market|limit)', text.lower())
+            match = re.search(r'\b(market|limit)\b', text.lower())
             if match:
                 return match.group(1)
 
@@ -268,11 +268,10 @@ class EntityExtractor:
         """영문 명령어의 토큰 기반 처리"""
         text = expand_k_suffix(text)
         # order_type과 intent 제거 후 나머지 토큰 추출
-        match = re.match(r'^(market|limit)?\s*(buy|sell)\s*', text.lower())
-        if match:
-            rest_of_text = text[match.end():]
-        else:
-            rest_of_text = text
+        rest_of_text = text
+        keywords_to_remove = ['market', 'limit', 'buy', 'sell']
+        for keyword in keywords_to_remove:
+            rest_of_text = re.sub(rf'\b{keyword}\b', '', rest_of_text, flags=re.IGNORECASE)
 
         # 이미 추출된 패턴들 제거 (상대 가격 패턴도 제거)
         patterns_to_remove = [
