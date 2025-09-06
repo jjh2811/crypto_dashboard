@@ -97,12 +97,18 @@ class TradeCommandParser:
         coin_symbol = str(entities["coin"])
         market_symbol = f"{coin_symbol}/{self.exchange_base.quote_currency}"
 
-        # 초기 추출된 가격/수량 정밀도 조정
+        # 초기 추출된 가격/수량/스탑가격 정밀도 조정
         if entities.get("price") is not None:
             adjusted_price, error = self._adjust_precision(entities["price"], market_symbol, 'price')
             if error:
                 return error
             entities["price"] = adjusted_price
+
+        if entities.get("stop_price") is not None:
+            adjusted_stop_price, error = self._adjust_precision(entities["stop_price"], market_symbol, 'price')
+            if error:
+                return error
+            entities["stop_price"] = adjusted_stop_price
 
         if entities.get("amount") is not None:
             adjusted_amount, error = self._adjust_precision(entities["amount"], market_symbol, 'amount')
@@ -110,30 +116,44 @@ class TradeCommandParser:
                 return error
             entities["amount"] = adjusted_amount
 
-        # 상대 가격 주문 처리
-        if entities.get("relative_price") is not None:
-            intent = str(entities["intent"])
-            relative_price_percentage = entities["relative_price"]
+        # 상대 가격 및 상대 스탑 가격 처리를 위한 기준 가격 가져오기
+        base_price_for_relative = None
+        if entities.get("relative_price") is not None or entities.get("relative_stop_price") is not None:
             order_book = await self.exchange_base.price_manager.get_order_book(coin_symbol)
-
             if order_book:
+                intent = str(entities["intent"])
                 base_price_num = order_book['bid'] if intent == 'buy' else order_book['ask']
-                base_price = Decimal(str(base_price_num))
-                calculated_price = base_price * (Decimal('1') + relative_price_percentage / Decimal('100'))
-
-                adjusted_price, error = self._adjust_precision(calculated_price, market_symbol, 'price')
-                if error:
-                    return error
-                entities['price'] = adjusted_price
-
-                self.logger.info(
-                    f"상대 가격 주문: {coin_symbol} 기준가({base_price}) 대비 {relative_price_percentage:+}% -> "
-                    f"지정가 {calculated_price}, 정밀도 조정 후: {adjusted_price}"
-                )
+                base_price_for_relative = Decimal(str(base_price_num))
             else:
                 error_message = f"'{coin_symbol}'의 호가를 가져올 수 없어 상대 가격 주문을 처리할 수 없습니다."
                 self.logger.error(error_message)
                 return error_message
+
+        # 상대 가격 주문 처리
+        if entities.get("relative_price") is not None and base_price_for_relative is not None:
+            relative_price_percentage = entities["relative_price"]
+            calculated_price = base_price_for_relative * (Decimal('1') + relative_price_percentage / Decimal('100'))
+            adjusted_price, error = self._adjust_precision(calculated_price, market_symbol, 'price')
+            if error:
+                return error
+            entities['price'] = adjusted_price
+            self.logger.info(
+                f"상대 가격 주문: {coin_symbol} 기준가({base_price_for_relative}) 대비 {relative_price_percentage:+}% -> "
+                f"지정가 {calculated_price}, 정밀도 조정 후: {adjusted_price}"
+            )
+        
+        # 상대 스탑 가격 주문 처리
+        if entities.get("relative_stop_price") is not None and base_price_for_relative is not None:
+            relative_stop_price_percentage = entities["relative_stop_price"]
+            calculated_stop_price = base_price_for_relative * (Decimal('1') + relative_stop_price_percentage / Decimal('100'))
+            adjusted_stop_price, error = self._adjust_precision(calculated_stop_price, market_symbol, 'price')
+            if error:
+                return error
+            entities['stop_price'] = adjusted_stop_price
+            self.logger.info(
+                f"상대 스탑 가격 주문: {coin_symbol} 기준가({base_price_for_relative}) 대비 {relative_stop_price_percentage:+}% -> "
+                f"스탑 가격 {calculated_stop_price}, 정밀도 조정 후: {adjusted_stop_price}"
+            )
 
         # 암시적 현재가 주문 처리
         elif entities.get("current_price_order") and entities.get("price") is None:
@@ -226,5 +246,6 @@ class TradeCommandParser:
             amount=str(final_amount) if final_amount is not None else None,
             price=str(entities.get("price")) if entities.get("price") is not None else None,
             order_type=str(entities["order_type"]),
+            stop_price=str(entities.get("stop_price")) if entities.get("stop_price") is not None else None,
             total_cost=str(total_cost) if total_cost is not None else None
         )

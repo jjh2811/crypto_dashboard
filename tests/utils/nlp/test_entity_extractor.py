@@ -1,4 +1,3 @@
-
 import pytest
 from decimal import Decimal
 import logging
@@ -120,4 +119,46 @@ def test_complex_korean_sentence(entity_extractor):
     assert entities["coin"] == "BTC"
     assert entities["amount"] == Decimal("0.5")
     assert entities["price"] == Decimal("60000")
+    assert entities["order_type"] == "limit"
+
+def test_extract_english_stop_limit_order(entity_extractor):
+    text = "limit buy 0.1 btc 50000 stop 49000"
+    entities = entity_extractor.extract_entities(text)
+    assert entities["intent"] == "buy"
+    assert entities["coin"] == "BTC"
+    assert entities["amount"] == Decimal("0.1")
+    assert entities["price"] == Decimal("50000")
+    assert entities["stop_price"] == Decimal("49000")
+    assert entities["order_type"] == "limit"
+
+def test_extract_english_relative_price_and_relative_stop_price(entity_extractor):
+    text = "limit buy btc 10usdt -10% stop -9%"
+    entities = entity_extractor.extract_entities(text)
+    assert entities["intent"] == "buy"
+    assert entities["coin"] == "BTC"
+    assert entities["total_cost"] == Decimal("10")
+    assert entities["relative_price"] == Decimal("-10")
+    assert entities["relative_stop_price"] == Decimal("-9")
+    assert entities["order_type"] == "limit"
+    assert entities["price"] is None
+    assert entities["stop_price"] is None
+
+def test_extract_korean_relative_price_and_relative_stop_price(entity_extractor):
+    text = "비트코인 10000원어치 -5%에 매수 stop -7%"
+    entities = entity_extractor.extract_entities(text)
+    assert entities["intent"] == "buy"
+    assert entities["coin"] == "BTC"
+    assert entities["total_cost"] == Decimal("10000")
+    assert entities["relative_price"] == Decimal("-5")
+    assert entities["relative_stop_price"] == Decimal("-7")
+    assert entities["order_type"] == "limit"
+
+def test_extract_english_fixed_price_and_relative_stop_price(entity_extractor):
+    text = "limit sell 1 eth 3000 stop -5%"
+    entities = entity_extractor.extract_entities(text)
+    assert entities["intent"] == "sell"
+    assert entities["coin"] == "ETH"
+    assert entities["amount"] == Decimal("1")
+    assert entities["price"] == Decimal("3000")
+    assert entities["relative_stop_price"] == Decimal("-5")
     assert entities["order_type"] == "limit"

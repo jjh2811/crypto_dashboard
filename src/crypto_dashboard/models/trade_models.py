@@ -15,4 +15,5 @@ class TradeCommand:
     amount: Optional[str]  # 거래 수량
     price: Optional[str]  # 지정가 가격 (시장가의 경우 None)
     order_type: str  # "market" or "limit"
+    stop_price: Optional[str] = None  # Stop 주문의 트리거 가격
     total_cost: Optional[str] = None  # 총 주문 비용

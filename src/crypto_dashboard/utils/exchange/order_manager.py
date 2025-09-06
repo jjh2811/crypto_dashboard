@@ -189,10 +189,16 @@ class OrderManager:
             side = command.intent
             amount = float(command.amount)
             price = float(command.price) if command.price else None
+            params = {}
+
+            # Stop-price가 있는 경우 params에 추가
+            if command.stop_price:
+                params['stopPrice'] = float(command.stop_price)
+                self.logger.info(f"Stop price found: {command.stop_price}")
 
             # 실제 주문 실행
-            self.logger.info(f"Creating order: {side} {amount} {symbol} at price {price}")
-            order = await self.exchange.create_order(symbol, order_type, side, amount, price)
+            self.logger.info(f"Creating order: {side} {amount} {symbol} at price {price} with params {params}")
+            order = await self.exchange.create_order(symbol, order_type, side, amount, price, params)
             self.logger.info("Successfully created order")
 
             return {

@@ -154,6 +154,9 @@ class EntityExtractor:
                     return None
 
                 masked_text = text
+                
+                # stop price 관련 부분 마스킹
+                masked_text = re.sub(r'stop\s+[+-]?\d+\.?\d*\s*%?', '', masked_text, flags=re.IGNORECASE)
 
                 # 총액 패턴 마스킹 ("10000원어치")
                 masked_text = re.sub(r'\b\d+(?:\.\d+)?\s*(?:원|달러|usdt)\s*어치\b', ' MASKED_COST ', masked_text, re.IGNORECASE)
@@ -215,16 +218,18 @@ class EntityExtractor:
             return '현재가' in text
 
     def _extract_relative_price(self, text: str, is_english: bool) -> Optional[Decimal]:
-        """텍스트에서 상대적 가격을 추출"""
+        """텍스트에서 상대적 가격을 추출 (stop price가 아닌)"""
+        # stop price 부분을 먼저 마스킹
+        masked_text = re.sub(r'stop\s+[+-]?\d+\.?\d*\s*%?', '', text, flags=re.IGNORECASE)
         try:
             if is_english:
-                # 영문: "+10%", "-5%" 패턴 (% 기호가 반드시 있어야 함)
-                price_match = re.search(r'([+-]\d+(?:\.\d+)?)\s*%?', text)
+                # 영문: "+10%", "-5%" 패턴
+                price_match = re.search(r'([+-]\d+(?:\.\d+)?)\s*%?', masked_text)
                 if price_match:
                     return Decimal(price_match.group(1))
             else:
                 # 한글: "+10%에", "-5.5에" 패턴
-                price_match = re.search(r'([+-]\d+(?:\.\d+)?)\s*(%|퍼센트)?\s*에?', text)
+                price_match = re.search(r'([+-]\d+(?:\.\d+)?)\s*(%|퍼센트)?\s*에?', masked_text)
                 if price_match:
                     return Decimal(price_match.group(1))
         except InvalidOperation:
@@ -264,20 +269,51 @@ class EntityExtractor:
         # 기본값은 market (한글은 가격 조건에 따라 나중에 변경)
         return "market"
 
+    def _extract_stop_price(self, text: str, is_english: bool) -> Optional[Decimal]:
+        """텍스트에서 stop 주문 가격을 추출 (절대값)"""
+        text = expand_k_suffix(text)
+        try:
+            # "stop" 키워드 뒤에 오는 숫자 추출 (상대값 패턴이 아닌 경우)
+            match = re.search(r'stop\s+(?![+-])(\d+\.?\d*)', text, re.IGNORECASE)
+            if match:
+                return Decimal(match.group(1))
+        except InvalidOperation:
+            return None
+        return None
+
+    def _extract_relative_stop_price(self, text: str, is_english: bool) -> Optional[Decimal]:
+        """텍스트에서 상대적 stop 주문 가격을 추출"""
+        try:
+            # "stop" 키워드 뒤에 오는 상대 가격(+/-) 추출
+            match = re.search(r'stop\s+([+-]\d+\.?\d*)\s*%?', text, re.IGNORECASE)
+            if match:
+                return Decimal(match.group(1))
+        except InvalidOperation:
+            return None
+        return None
+
     def _process_english_tokens(self, text: str, entities: Dict[str, Any]) -> None:
         """영문 명령어의 토큰 기반 처리"""
         text = expand_k_suffix(text)
         # order_type과 intent 제거 후 나머지 토큰 추출
         rest_of_text = text
-        keywords_to_remove = ['market', 'limit', 'buy', 'sell']
+        keywords_to_remove = ['market', 'limit', 'buy', 'sell'] # 'stop'은 아래에서 별도 처리
         for keyword in keywords_to_remove:
             rest_of_text = re.sub(rf'\b{keyword}\b', '', rest_of_text, flags=re.IGNORECASE)
 
-        # 이미 추출된 패턴들 제거 (상대 가격 패턴도 제거)
+        # 이미 추출된 패턴들 제거 (상대 가격, stop 가격, 총액)
         patterns_to_remove = [
+            r'stop\s+[+-]?\d+\.?\d*\s*%?',  # stop price
             r'\d+(?:\.\d*)?\s*(?:usdt|dollar|krw|won)\b',  # 10 usdt, 10krw 등
-            r'[+-]\d+(?:\.\d*)?\s*%?'  # +5%, -10 등
         ]
+        
+        # relative_price가 있는 경우, 해당 패턴도 제거
+        if entities.get("relative_price") is not None:
+            # stop price가 아닌 상대 가격 패턴만 제거
+            masked_for_relative = re.sub(r'stop\s+[+-]?\d+\.?\d*\s*%?', '', text, flags=re.IGNORECASE)
+            relative_match = re.search(r'([+-]\d+(?:\.\d+)?)\s*%?', masked_for_relative)
+            if relative_match:
+                patterns_to_remove.append(re.escape(relative_match.group(0)))
 
         for pattern in patterns_to_remove:
             rest_of_text = re.sub(pattern, '', rest_of_text, flags=re.IGNORECASE)
@@ -315,10 +351,16 @@ class EntityExtractor:
         # 숫자를 수량과 가격에 할당
         has_amount_spec = entities.get('total_cost') is not None or entities.get('relative_amount') is not None
         if numbers:
+            # stop_price가 이미 명시적으로 추출되었다면, 해당 숫자는 할당에서 제외
+            if entities.get('stop_price') is not None and entities['stop_price'] in numbers:
+                numbers.remove(entities['stop_price'])
+
             if not has_amount_spec and not entities.get('amount'):
-                entities['amount'] = numbers.pop(0)
+                if numbers:
+                    entities['amount'] = numbers.pop(0)
             if numbers and not entities.get('price'):
                 entities['price'] = numbers.pop(0)
+
 
     def extract_entities(self, text: str) -> Dict[str, Any]:
         """주어진 텍스트에서 거래 관련 모든 엔터티를 통합 추출"""
@@ -335,7 +377,8 @@ class EntityExtractor:
         entities: Dict[str, Any] = {
             "intent": None, "coin": None, "amount": None, "price": None,
             "relative_price": None, "relative_amount": None, "total_cost": None,
-            "current_price_order": False, "order_type": "market"
+            "current_price_order": False, "order_type": "market", "stop_price": None,
+            "relative_stop_price": None
         }
 
         # 각 엔터티 추출 (언어별 로직 적용)
@@ -343,6 +386,8 @@ class EntityExtractor:
         entities["coin"] = self._extract_coin(clean_input, is_english)
         entities["amount"] = self._extract_amount(clean_input, is_english)
         entities["price"] = self._extract_price(clean_input, is_english)
+        entities["stop_price"] = self._extract_stop_price(clean_input, is_english)
+        entities["relative_stop_price"] = self._extract_relative_stop_price(clean_input, is_english)
         entities["total_cost"] = self._extract_total_cost(clean_input, is_english)
         entities["current_price_order"] = self._extract_current_price_order(clean_input, is_english)
         entities["relative_price"] = self._extract_relative_price(clean_input, is_english)
@@ -357,10 +402,12 @@ class EntityExtractor:
         if entities["amount"] is not None:
             entities["relative_amount"] = None
 
+        # 지정가 관련 정보가 있으면 limit 주문으로 설정
         if (
             entities["price"] is not None or
             entities["current_price_order"] or
             entities["relative_price"] is not None
         ):
             entities["order_type"] = "limit"
+        
         return entities
