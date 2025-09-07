@@ -1,10 +1,10 @@
 // src/crypto_dashboard/frontend/modules/websocket/websocket.js
 
 import {
-    updateCurrentPrices, updateCachedOrders, addCachedLog, updateExchanges,
+    updateCurrentPrices, updateCurrentPercentages, updateCachedOrders, addCachedLog, updateExchanges,
     updateFollowCoins, updateValueFormats, updateExchangeInfo, updateReferencePrices,
     setPendingNlpCommand, clearPendingNlpCommand,
-        activeExchange, pendingNlpCommand, getExchangeInfo, getCurrentPrices
+        activeExchange, pendingNlpCommand, getExchangeInfo, getCurrentPrices, getCurrentPercentages
 } from '../data/data_store.js';
 
 import {
@@ -103,6 +103,8 @@ export function connectWebSocket() {
                     break;
                 case 'price_update':
                     updateCurrentPrices({ [data.symbol]: parseFloat(data.price) });
+                    // percentage 데이터를 별도로 업데이트
+                    updateCurrentPercentages({ [data.symbol]: parseFloat(data.percentage) });
                     updatePriceDiffs();
 
                     // Also trigger a re-render for the main crypto card
@@ -117,6 +119,7 @@ export function connectWebSocket() {
                             ...cardPrice.dataset, // Preserve all existing data
                             symbol: data.symbol,
                             price: data.price,
+                            percentage: data.percentage, // 24시간 변화율 추가
                             value: value,
                         };
                         renderCryptoCard(renderDataPrice);

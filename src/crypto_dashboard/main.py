@@ -52,7 +52,7 @@ def init_app():
 
     # 로깅 설정
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.INFO,  # 디버깅 완료 후 INFO로 복원
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[logging.StreamHandler()]
     )

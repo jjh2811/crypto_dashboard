@@ -1,6 +1,7 @@
 // src/crypto_dashboard/frontend/modules/data/data_store.js
 
 export let currentPrices = {};
+export let currentPercentages = {};  // 24시간 가격 변화율 저장
 export let cachedOrders = [];
 export let cachedLogs = [];
 export let exchanges = [];
@@ -19,9 +20,17 @@ export function getCurrentPrices() {
     return currentPrices;
 }
 
+export function getCurrentPercentages() {
+    return currentPercentages;
+}
+
 // 데이터 업데이트 함수 (필요에 따라 setter 함수 추가 가능)
 export function updateCurrentPrices(newPrices) {
     currentPrices = { ...currentPrices, ...newPrices };
+}
+
+export function updateCurrentPercentages(newPercentages) {
+    currentPercentages = { ...currentPercentages, ...newPercentages };
 }
 
 export function updateCachedOrders(newOrders) {

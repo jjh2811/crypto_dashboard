@@ -3,11 +3,13 @@
 import { formatNumber } from '../utils/utils.js';
 import {
     currentPrices,
+    currentPercentages,
     cachedOrders,
     referencePrices,
     valueFormats,
     activeExchange,
-    followCoins
+    followCoins,
+    getCurrentPercentages
 } from '../data/data_store.js';
 
 // DOM 요소 캐싱
@@ -30,6 +32,17 @@ function createCryptoCardHTML(data) {
     const roi = Number.isFinite(parseFloat(data.roi)) ? parseFloat(data.roi) : null;
 
     const decimalPlaces = valueFormats[exchange] ?? 3;
+
+    // 24시간 변화율 계산
+    const percentages = getCurrentPercentages();
+    const percentageChange = percentages[symbol] || 0;
+    let percentageClass = '';
+    let percentageText = '0.00%';
+
+    if (percentageChange !== 0) {
+        percentageText = `${percentageChange >= 0 ? '+' : ''}${percentageChange.toFixed(2)}%`;
+        percentageClass = percentageChange >= 0 ? 'profit-positive' : 'profit-negative';
+    }
 
     let avgPriceText = '-';
     if (data.avg_buy_price && Number.isFinite(parseFloat(data.avg_buy_price))) {
@@ -63,6 +76,12 @@ function createCryptoCardHTML(data) {
             <span class="info-value">
                 <span class="price-value">${formatNumber(price)}</span>
                 <span class="price-change-percent ${priceChangeClass}">${priceChangeText}</span>
+            </span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">24h Change:</span>
+            <span class="info-value">
+                <span class="price-change-24h ${percentageClass}">${percentageText}</span>
             </span>
         </div>
         <div class="info-row">
@@ -132,6 +151,7 @@ export function renderCryptoCard(data) {
     // Card exists, update only the necessary parts.
     const priceElement = card.querySelector(".price-value");
     const priceChangeElement = card.querySelector(".price-change-percent");
+    const priceChange24hElement = card.querySelector(".price-change-24h");
     const avgPriceElement = card.querySelector(".avg-price-value");
     const roiElement = card.querySelector(".roi-value");
     const valueContainer = card.querySelector(".value");
@@ -148,6 +168,22 @@ export function renderCryptoCard(data) {
         } else {
             priceChangeElement.textContent = '';
         }
+    }
+
+    // Update 24h Change Percentage
+    if (priceChange24hElement) {
+        const percentages = getCurrentPercentages();
+        const percentageChange = percentages[symbol] || 0;
+        let percentageClass = '';
+        let percentageText = '0.00%';
+
+        if (percentageChange !== 0) {
+            percentageText = `${percentageChange >= 0 ? '+' : ''}${percentageChange.toFixed(2)}%`;
+            percentageClass = percentageChange >= 0 ? 'profit-positive' : 'profit-negative';
+        }
+
+        priceChange24hElement.className = `price-change-24h ${percentageClass}`;
+        priceChange24hElement.textContent = percentageText;
     }
 
     // Update Avg. Price and ROI

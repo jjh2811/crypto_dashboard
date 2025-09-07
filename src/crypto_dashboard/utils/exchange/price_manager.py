@@ -1,6 +1,6 @@
 import asyncio
 from decimal import Decimal
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
     from ...exchange_coordinator import ExchangeCoordinator
@@ -46,17 +46,25 @@ class PriceManager:
                 except Exception as e_single:
                     self.logger.warning(f"Failed to fetch price for {asset}: {e_single}")
 
-    async def _update_asset_price(self, asset: str, symbol: str, price: Decimal) -> None:
+    async def _update_asset_price(self, asset: str, symbol: str, price: Decimal, ticker: Optional[Dict] = None) -> None:
         """자산 가격 업데이트 및 브로드캐스트"""
         if price <= 0:
             return
 
         # 1. 모든 추적 자산에 대해 price_update 메시지를 항상 전송합니다.
+        percentage = 0.0
+        if ticker is not None:
+            # CCXT ticker에서 percentage 값 가져오기
+            percentage_raw = ticker.get('percentage')
+            if percentage_raw is not None:
+                percentage = float(percentage_raw)
+
         update_message = {
             'type': 'price_update',
             'exchange': self.name,
             'symbol': symbol,
-            'price': float(price)
+            'price': float(price),
+            'percentage': percentage  # 24시간 변화율 추가
         }
         await self.app['broadcast_message'](update_message)
 
@@ -79,7 +87,7 @@ class PriceManager:
                     if not asset:
                         continue
 
-                    await self._update_asset_price(asset, symbol, Decimal(str(price)))
+                    await self._update_asset_price(asset, symbol, Decimal(str(price)), ticker)
 
             except asyncio.CancelledError:
                 self.logger.info("Ticker watch loop cancelled.")
