@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import asdict
 import json
 import os
+import mimetypes
 
 from aiohttp import web
 
@@ -18,7 +19,17 @@ async def http_handler(request):
     filename = request.match_info.get('filename', 'index.html')
     filepath = os.path.join(os.path.dirname(__file__), '..', 'frontend', filename)
     if os.path.exists(filepath):
-        return web.FileResponse(filepath)
+        # 파일 확장자에 따라 MIME 타입 추론
+        mime_type, _ = mimetypes.guess_type(filepath)
+        if mime_type is None:
+            # 추론 실패 시 기본값 설정 (예: text/plain)
+            mime_type = 'application/octet-stream' # 또는 'text/plain'
+        
+        # .js 파일에 대해 명시적으로 application/javascript 설정
+        if filename.endswith('.js'):
+            mime_type = 'application/javascript'
+        
+        return web.FileResponse(filepath, headers={'Content-Type': mime_type})
     return web.Response(status=404)
 
 

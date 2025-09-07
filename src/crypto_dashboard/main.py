@@ -23,7 +23,11 @@ from .utils.broadcast import (
     basic_broadcast_orders_update,
 )
 from .utils.server_lifecycle import on_cleanup, on_shutdown, on_startup
-from .utils.web_handlers import handle_websocket, http_handler
+from .utils.web_handlers import handle_websocket
+
+
+async def index_handler(request):
+    return web.FileResponse(os.path.join(os.path.dirname(__file__), 'frontend', 'index.html'))
 
 
 @web.middleware
@@ -92,8 +96,13 @@ def init_app():
 
     # 라우팅 설정
     app.router.add_get('/ws', handle_websocket)
-    app.router.add_get('/', http_handler)
-    app.router.add_get('/{filename}', http_handler)
+    # 루트 경로로 요청 시 index.html 서빙
+    app.router.add_get('/', index_handler) # lambda 대신 index_handler 사용
+
+    # 정적 파일 서빙
+    # frontend 디렉토리의 모든 파일을 루트 경로에서 서빙 (index.html, style.css 등)
+    app.router.add_static('/', path=os.path.join(os.path.dirname(__file__), 'frontend'))
+
     app.router.add_get('/login', login)
     app.router.add_post('/login', login)
     app.router.add_get('/logout', logout)
