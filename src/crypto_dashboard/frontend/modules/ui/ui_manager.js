@@ -593,6 +593,12 @@ function createLogElement(data) {
     if (logData.amount) {
         messageText += ` | Amount: ${formatNumber(parseFloat(logData.amount))}`;
     }
+
+    // 스탑 주문 정보 표시
+    if (logData.order_type === 'STOP' && logData.stop_price) {
+        messageText += ` | Stop Price: ${formatNumber(parseFloat(logData.stop_price))}`;
+    }
+
     // 수수료 정보 추가
     if (logData.fee && logData.fee.cost > 0) {
         messageText += ` | Fee: ${formatNumber(logData.fee.cost)} ${logData.fee.currency}`;

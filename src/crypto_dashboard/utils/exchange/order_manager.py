@@ -127,7 +127,8 @@ class OrderManager:
                 'filled': float(new_filled),
                 'value': float(price * (amount - new_filled)),
                 'timestamp': order.get('timestamp'),
-                'status': status
+                'status': status,
+                'was_stop_order': bool(stop_price)  # 스탑 주문 여부 플래그
             }
 
         # 프론트엔드에 주문 목록 업데이트 브로드캐스트
@@ -142,6 +143,22 @@ class OrderManager:
             'price': float(order.get('average') or order.get('price') or '0'),
             'amount': float(trade_amount if trade_amount > 0 else order.get('amount', '0'))
         }
+
+        # 스탑 주문 여부 확인 및 로그에 반영
+        # 현재 주문 객체, 캐시된 주문 정보, 또는 was_stop_order 플래그에서 확인
+        current_stop_price = (order.get('stopPrice') or order.get('triggerPrice') or
+                             old_order.get('stop_price'))
+
+        was_stop_order = (order.get('stopPrice') is not None or
+                         order.get('triggerPrice') is not None or
+                         old_order.get('was_stop_order', False))
+
+        if current_stop_price or was_stop_order:
+            order_type = 'STOP'  # 스탑 주문임을 명확히 표시
+            log_payload['order_type'] = order_type
+            if current_stop_price:
+                log_payload['stop_price'] = float(current_stop_price)
+
         # 수수료 정보 추가
         if 'fee' in order and order['fee'] is not None:
             log_payload['fee'] = order['fee']
@@ -201,7 +218,13 @@ class OrderManager:
                 self.logger.info(f"Stop price found: {command.stop_price}")
 
             # 실제 주문 실행
-            self.logger.info(f"Creating order: {side} {amount} {symbol} at price {price} with params {params}")
+            if 'stopPrice' in params or 'triggerPrice' in params:
+                # 스탑 주문 수행
+                order_type_text = 'STOP'  # 스탑 주문임을 명확히 표시
+                self.logger.info(f"Creating {order_type_text} order: {side} {amount} {symbol} at price {price} with stop price {params.get('stopPrice') or params.get('triggerPrice')} with params {params}")
+            else:
+                # 일반 주문
+                self.logger.info(f"Creating {order_type} order: {side} {amount} {symbol} at price {price} with params {params}")
             order = await self.exchange.create_order(symbol, order_type, side, amount, price, params)
             self.logger.info("Successfully created order")
 
