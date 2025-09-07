@@ -93,13 +93,13 @@ class BalanceManager:
 
         formatted_avg_buy_price = None
         if avg_buy_price is not None:
-            # Round the Decimal before converting to float for sending.
-            # The internal cache remains at full precision.
-            formatted_avg_buy_price = float(round(avg_buy_price, decimal_places))
+            # Send at full precision without rounding
+            formatted_avg_buy_price = float(avg_buy_price)
 
         formatted_realised_pnl = None
         if realised_pnl is not None:
-            formatted_realised_pnl = float(round(realised_pnl, decimal_places))
+            # Send at full precision without rounding
+            formatted_realised_pnl = float(realised_pnl)
 
         message = {
             'type': 'portfolio_update',
