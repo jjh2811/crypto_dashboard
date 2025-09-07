@@ -85,6 +85,7 @@ class EventHandler:
         while True:
             try:
                 orders = await self.exchange.watch_orders()
+                self.logger.info(f"watch_orders raw response: {orders}")
                 for order in orders:
                     self.order_manager.update_order(order)
 

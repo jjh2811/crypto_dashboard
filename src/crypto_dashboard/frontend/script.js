@@ -522,8 +522,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
 
                 priceDiffElement.className = `info-value price-diff-value ${diffClass}`;
-                const formattedAmount = priceDifference > 0 ? `+${formatNumber(priceDifference)}` : formatNumber(priceDifference);
-                priceDiffElement.textContent = `${formattedAmount} (${priceDiffPercent.toFixed(2)}%)`;
+                priceDiffElement.textContent = `${priceDiffPercent.toFixed(2)}%`;
             }
         });
     }
@@ -587,26 +586,63 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function updateOrderCard(card, order, currentPrice) {
-        // This function updates an existing order card with new data
-        const { amount, filled, price, side, exchange } = order;
+        const { amount, filled, price, side, exchange, stop_price } = order;
         const orderDecimalPlaces = valueFormats[exchange] ?? 3;
 
-        // Update Price Difference
-        const priceDiffElement = card.querySelector('.price-diff-value');
-        if (priceDiffElement) {
-            let priceDiffText = '-';
-            let diffClass = '';
-            if (currentPrice) {
-                const priceDifference = price - currentPrice;
-                const priceDiffPercent = currentPrice > 0 ? (priceDifference / currentPrice) * 100 : 0;
-                diffClass = priceDifference > 0 ? 'diff-positive' : (priceDifference < 0 ? 'diff-negative' : 'profit-neutral');
-                const formattedAmount = priceDifference > 0 ? `+${formatNumber(priceDifference)}` : formatNumber(priceDifference);
-                priceDiffText = `${formattedAmount} (${priceDiffPercent.toFixed(2)}%)`;
+        // Update Stop Price
+        let stopPriceRow = card.querySelector('.stop-price-row');
+        if (stop_price !== null && stop_price !== undefined && parseFloat(stop_price) !== 0) {
+            if (!stopPriceRow) {
+                // Add the stop price row if it doesn't exist
+                const priceRow = card.querySelector('.price-row');
+                if (priceRow) {
+                    stopPriceRow = document.createElement('div');
+                    stopPriceRow.className = 'info-row stop-price-row';
+                    priceRow.parentNode.insertBefore(stopPriceRow, priceRow.nextSibling);
+                }
             }
-            priceDiffElement.className = `info-value price-diff-value ${diffClass}`;
-            priceDiffElement.textContent = priceDiffText;
+            if (stopPriceRow) {
+                let stopDiffText = '-';
+                let stopDiffClass = '';
+                if (currentPrice && stop_price) {
+                    const stopDifference = stop_price - currentPrice;
+                    const stopDiffPercent = currentPrice > 0 ? (stopDifference / currentPrice) * 100 : 0;
+                    if (stopDifference > 0) {
+                        stopDiffClass = 'diff-positive';
+                    } else if (stopDifference < 0) {
+                        stopDiffClass = 'diff-negative';
+                    } else {
+                        stopDiffClass = 'profit-neutral';
+                    }
+                    stopDiffText = `${stopDiffPercent.toFixed(2)}%`;
+                }
+                stopPriceRow.innerHTML = `
+                    <span class="info-label">Stop Price:</span>
+                    <span class="info-value">${formatNumber(stop_price)} <span class="price-diff ${stopDiffClass}">(${stopDiffText})</span></span>
+                `;
+            }
+        } else if (stopPriceRow) {
+            // Remove the stop price row if it exists but is no longer needed
+            stopPriceRow.remove();
         }
 
+        // Update Price Difference in price row
+        const priceDiffSpan = card.querySelector('.price-row .price-diff');
+        if (priceDiffSpan && currentPrice) {
+            let diffClass = '';
+            const priceDifference = price - currentPrice;
+            if (priceDifference > 0) {
+                diffClass = 'diff-positive';
+            } else if (priceDifference < 0) {
+                diffClass = 'diff-negative';
+            } else {
+                diffClass = 'profit-neutral';
+            }
+            priceDiffSpan.className = `price-diff ${diffClass}`;
+            const priceDiffPercent = currentPrice > 0 ? (priceDifference / currentPrice) * 100 : 0;
+            priceDiffSpan.textContent = `(${priceDiffPercent.toFixed(2)}%)`;
+        }
+        
         // Update Amount and Progress Bar
         const amountElement = card.querySelector('.amount-value');
         const progressBarElement = card.querySelector('.progress-bar');
@@ -708,7 +744,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const sideClass = side === 'BUY' ? 'side-buy' : 'side-sell';
         const orderDate = new Date(order.timestamp).toLocaleString();
         
-        // Correctly derive market from the symbol first.
         let marketCurrencyForDisplay;
         if (order.symbol && order.symbol.includes('/')) {
             marketCurrencyForDisplay = order.symbol.split('/')[1];
@@ -719,7 +754,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let priceDiffText = '-';
         let diffClass = '';
-        if (currentPrice) {
+        if (currentPrice && order.price) {
             const priceDifference = order.price - currentPrice;
             const priceDiffPercent = currentPrice > 0 ? (priceDifference / currentPrice) * 100 : 0;
 
@@ -730,8 +765,7 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 diffClass = 'profit-neutral';
             }
-            const formattedAmount = priceDifference > 0 ? `+${formatNumber(priceDifference)}` : formatNumber(priceDifference);
-            priceDiffText = `${formattedAmount} (${priceDiffPercent.toFixed(2)}%)`;
+            priceDiffText = `${priceDiffPercent.toFixed(2)}%`;
         }
 
         const amount = parseFloat(order.amount) || 0;
@@ -751,9 +785,39 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const unfilledValue = (amount - filled) * price;
-
-        // 주문 카드의 value 표시를 위한 decimal places (Now follows the exchange's setting)
         const orderDecimalPlaces = valueFormats[order.exchange] ?? 3;
+
+        let stopPriceHTML = '';
+        if (order.stop_price !== null && order.stop_price !== undefined && parseFloat(order.stop_price) !== 0) {
+            let stopDiffText = '-';
+            let stopDiffClass = '';
+            if (currentPrice && order.stop_price) {
+                const stopDifference = order.stop_price - currentPrice;
+                const stopDiffPercent = currentPrice > 0 ? (stopDifference / currentPrice) * 100 : 0;
+                if (stopDifference > 0) {
+                    stopDiffClass = 'diff-positive';
+                } else if (stopDifference < 0) {
+                    stopDiffClass = 'diff-negative';
+                } else {
+                    stopDiffClass = 'profit-neutral';
+                }
+                stopDiffText = `${stopDiffPercent.toFixed(2)}%`;
+            }
+            stopPriceHTML = `
+            <div class="info-row stop-price-row">
+                <span class="info-label">Stop Price:</span>
+                <span class="info-value">${formatNumber(order.stop_price)} <span class="price-diff ${stopDiffClass}">(${stopDiffText})</span></span>
+            </div>`;
+        }
+
+        let priceHTML = '';
+        if (order.price !== null && order.price !== undefined && parseFloat(order.price) !== 0) {
+            priceHTML = `
+            <div class="info-row price-row">
+                <span class="info-label">Price:</span>
+                <span class="info-value">${formatNumber(order.price)} ${priceDiffText !== '-' ? `<span class="price-diff ${diffClass}">(${priceDiffText})</span>` : ''}</span>
+            </div>`;
+        }
 
         return `
             <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -764,17 +828,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 <span class="info-label">Side:</span>
                 <span class="info-value ${sideClass}">${side}</span>
             </div>
-            <div class="info-row">
-                <span class="info-label">Price:</span>
-                <span class="info-value">${formatNumber(order.price)}</span>
-            </div>
+            ${priceHTML}
+            ${stopPriceHTML}
             <div class="info-row">
                 <span class="info-label">Market:</span>
                 <span class="info-value">${marketCurrencyForDisplay}</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Diff:</span>
-                <span class="info-value price-diff-value ${diffClass}">${priceDiffText}</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Amount:</span>
@@ -936,6 +994,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (command.price) {
             htmlParts.push(`<div class="detail-row"><span class="detail-label">지정가:</span><span class="detail-value">${command.price}</span></div>`);
+        }
+
+        if (command.stop_price) {
+            htmlParts.push(`<div class="detail-row"><span class="detail-label">스탑 가격:</span><span class="detail-value">${command.stop_price}</span></div>`);
         }
 
         if (command.total_cost) {

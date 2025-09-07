@@ -29,6 +29,7 @@ class OrderManager:
             price = Decimal(str(order.get('price') or 0))
             amount = Decimal(str(order.get('amount') or 0))
             filled = Decimal(str(order.get('filled') or 0))
+            stop_price = order.get('stopPrice')
             order_id = order.get('id')
             if order_id:
                 self.orders_cache[order_id] = {
@@ -36,6 +37,7 @@ class OrderManager:
                     'symbol': order.get('symbol', ''),
                     'side': order.get('side'),
                     'price': float(price),
+                    'stop_price': float(stop_price) if stop_price is not None else None,
                     'amount': float(amount),
                     'filled': float(filled),
                     'value': float(price * (amount - filled)), # 미체결 수량 기준 가치
@@ -114,11 +116,13 @@ class OrderManager:
         else: # open (partially filled 포함)
             price = Decimal(str(order.get('price') or '0'))
             amount = Decimal(str(order.get('amount') or '0'))
+            stop_price = order.get('stopPrice')
             self.orders_cache[order_id] = {
                 'id': order_id,
                 'symbol': order.get('symbol', ''),
                 'side': order.get('side'),
                 'price': float(price),
+                'stop_price': float(stop_price) if stop_price is not None else None,
                 'amount': float(amount),
                 'filled': float(new_filled),
                 'value': float(price * (amount - new_filled)),
