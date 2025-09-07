@@ -91,7 +91,7 @@ async def handle_websocket(request):
 
             # 초기에 follow 코인 목록 및 포맷 설정 전송
             follow_message = {
-                'type': 'follow_coins',
+                'type': 'tracked_coins',
                 'exchange': exchange_name,
                 'follows': list(getattr(exchange, 'follows', []))
             }

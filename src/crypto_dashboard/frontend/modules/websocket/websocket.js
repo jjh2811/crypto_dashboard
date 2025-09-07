@@ -45,9 +45,9 @@ export function connectWebSocket() {
                         setActiveExchange(data.data[0]);
                     }
                     break;
-                case 'follow_coins':
+                case 'tracked_coins':
                     updatePriceTrackedCoins(data.exchange, data.follows);
-                    console.log(`Received follow coins for ${data.exchange}:`, data.follows);
+                    console.log(`Received tracked coins for ${data.exchange}:`, data.follows);
                     break;
                 case 'value_format':
                     updateValueFormats(data.exchange, data.value_decimal_places);
