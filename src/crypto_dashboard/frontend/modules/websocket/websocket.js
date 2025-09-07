@@ -2,7 +2,7 @@
 
 import {
     updateCurrentPrices, updateCurrentPercentages, updateCachedOrders, addCachedLog, updateExchanges,
-    updateFollowCoins, updateValueFormats, updateExchangeInfo, updateReferencePrices,
+    updatePriceTrackedCoins, updateValueFormats, updateExchangeInfo, updateReferencePrices,
     setPendingNlpCommand, clearPendingNlpCommand,
         activeExchange, pendingNlpCommand, getExchangeInfo, getCurrentPrices, getCurrentPercentages
 } from '../data/data_store.js';
@@ -46,7 +46,7 @@ export function connectWebSocket() {
                     }
                     break;
                 case 'follow_coins':
-                    updateFollowCoins(data.exchange, data.follows);
+                    updatePriceTrackedCoins(data.exchange, data.follows);
                     console.log(`Received follow coins for ${data.exchange}:`, data.follows);
                     break;
                 case 'value_format':

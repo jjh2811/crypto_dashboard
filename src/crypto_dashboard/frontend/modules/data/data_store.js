@@ -6,7 +6,7 @@ export let cachedOrders = [];
 export let cachedLogs = [];
 export let exchanges = [];
 export let activeExchange = '';
-export let followCoins = {};  // follow 코인 캐시: {exchange: Set(coins)}
+export let priceTrackedCoins = {};  // 가격 추적 코인 캐시: {exchange: Set(coins)}
 export let valueFormats = {};  // value 소수점 포맷: {exchange: integer}
 export let exchangeInfo = {}; // quote_currency 등 거래소 정보 저장
 export let referencePrices = {}; // 기준 가격 정보 저장
@@ -49,8 +49,8 @@ export function setActiveExchange(exchange) {
     activeExchange = exchange;
 }
 
-export function updateFollowCoins(exchange, follows) {
-    followCoins[exchange] = new Set(follows);
+export function updatePriceTrackedCoins(exchange, follows) {
+    priceTrackedCoins[exchange] = new Set(follows);
 }
 
 export function updateValueFormats(exchange, value_decimal_places) {

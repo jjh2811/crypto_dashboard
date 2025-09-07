@@ -1,16 +1,7 @@
 // src/crypto_dashboard/frontend/modules/ui/crypto_card.js
 
 import { formatNumber } from '../utils/utils.js';
-import {
-    currentPrices,
-    currentPercentages,
-    cachedOrders,
-    referencePrices,
-    valueFormats,
-    activeExchange,
-    followCoins,
-    getCurrentPercentages
-} from '../data/data_store.js';
+import { activeExchange, currentPrices, currentPercentages, priceTrackedCoins, valueFormats, referencePrices, getExchangeInfo, getCurrentPercentages, cachedOrders } from '../data/data_store.js';
 
 // DOM 요소 캐싱
 const cryptoContainer = document.getElementById("crypto-container");
@@ -220,7 +211,7 @@ export function renderCryptoCard(data) {
     const totalAmount = parseFloat(card.dataset.free || 0) + parseFloat(card.dataset.locked || 0);
     const isZeroBalance = totalAmount === 0;
     const baseAsset = symbol.split('/')[0];
-    const is_follow = followCoins[exchange]?.has(baseAsset) || false;
+    const is_follow = priceTrackedCoins[exchange]?.has(baseAsset) || false;
     card.classList.toggle('follow-zero-balance', is_follow && isZeroBalance);
 
     // Hide if not in active exchange
