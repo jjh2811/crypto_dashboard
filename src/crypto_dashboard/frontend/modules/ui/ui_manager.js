@@ -508,7 +508,7 @@ export function updateOrdersList() {
         if (!incomingOrderIds.has(id)) {
             const cardToRemove = ordersContainer.querySelector(`.crypto-card[data-order-id='${id}']`);
             if (cardToRemove) {
-                card.remove();
+                cardToRemove.remove();
             }
         }
     });
