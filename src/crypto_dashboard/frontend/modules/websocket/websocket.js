@@ -8,7 +8,7 @@ import {
 } from '../data/data_store.js';
 
 import {
-    renderCryptoCard, updateOrdersList, updateLogsList, updateReferencePriceInfo,
+    renderCryptoCard, updateOrdersList, updateLogsList, updatePriceDiffs, updateReferencePriceInfo,
     createExchangeTabs, setActiveExchange, showConfirmModal, showAlertModal, hideAlertModal
 } from '../ui/ui_manager.js';
 
@@ -101,7 +101,7 @@ export function connectWebSocket() {
                     break;
                 case 'price_update':
                     updateCurrentPrices({ [data.symbol]: parseFloat(data.price) });
-                    // updatePriceDiffs(); // updateOrdersList에서 호출되므로 여기서는 필요 없음
+                    updatePriceDiffs();
 
                     // Also trigger a re-render for the main crypto card
                     const uniqueIdPrice = `${data.exchange}_${data.symbol}`;

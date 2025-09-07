@@ -262,8 +262,10 @@ export function updatePriceDiffs() {
         if (!order) return;
 
         const currentPrice = currentPrices[order.symbol];
-        const priceDiffElement = card.querySelector('.price-diff-value');
+        const priceDiffElement = card.querySelector('.price-row .price-diff');
+        const stopPriceDiffElement = card.querySelector('.stop-price-row .price-diff');
 
+        // Update price diff
         if (currentPrice && priceDiffElement) {
             const priceDifference = order.price - currentPrice;
             const priceDiffPercent = currentPrice > 0 ? (priceDifference / currentPrice) * 100 : 0;
@@ -277,8 +279,26 @@ export function updatePriceDiffs() {
                 diffClass = 'profit-neutral';
             }
 
-            priceDiffElement.className = `info-value price-diff-value ${diffClass}`;
-            priceDiffElement.textContent = `${priceDiffPercent.toFixed(2)}%`;
+            priceDiffElement.className = `price-diff ${diffClass}`;
+            priceDiffElement.textContent = `(${priceDiffPercent.toFixed(2)}%)`;
+        }
+
+        // Update stop price diff
+        if (currentPrice && stopPriceDiffElement && order.stop_price) {
+            const stopDifference = order.stop_price - currentPrice;
+            const stopDiffPercent = currentPrice > 0 ? (stopDifference / currentPrice) * 100 : 0;
+
+            let stopDiffClass;
+            if (stopDifference > 0) {
+                stopDiffClass = 'diff-positive';
+            } else if (stopDifference < 0) {
+                stopDiffClass = 'diff-negative';
+            } else {
+                stopDiffClass = 'profit-neutral';
+            }
+
+            stopPriceDiffElement.className = `price-diff ${stopDiffClass}`;
+            stopPriceDiffElement.textContent = `(${stopDiffPercent.toFixed(2)}%)`;
         }
     });
 }
