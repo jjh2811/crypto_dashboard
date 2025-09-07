@@ -97,7 +97,7 @@ class ExchangeCoordinator:
                     self.balance_manager.add_follow_asset(asset)
 
             # tracked_assets 업데이트 및 가격 데이터 초기화
-            await self.update_tracked_assets_and_restart_watcher(is_initial=True)
+            await self.update_tracked_assets_and_restart_watcher()
 
 
         except Exception as e:
@@ -105,10 +105,10 @@ class ExchangeCoordinator:
             await self.exchange.close()
             raise
 
-    async def update_tracked_assets_and_restart_watcher(self, is_initial: bool = False) -> None:
+    async def update_tracked_assets_and_restart_watcher(self) -> None:
         """
         잔고, 주문, follows 목록을 기반으로 추적 자산 목록을 업데이트하고,
-        이에 맞춰 Ticker 감시 루프를 재시작합니다.
+        이에 맞춰 Ticker 감시 루프를 재시작하며, 변경 사항을 클라이언트에게 알립니다.
         """
         async with self.watcher_restart_lock:
             self.logger.debug("Updating tracked assets and restarting watcher...")
@@ -127,9 +127,9 @@ class ExchangeCoordinator:
 
             old_tracked_set = self.tracked_assets
 
-            # 변경 사항이 없으면 재시작 안함 (초기화 시에는 무조건 실행)
-            if not is_initial and new_tracked_set == old_tracked_set:
-                self.logger.debug("Tracked assets unchanged. Watcher not restarted.")
+            # 변경 사항이 없으면 아무것도 하지 않음
+            if new_tracked_set == old_tracked_set:
+                self.logger.debug("Tracked assets unchanged. No action needed.")
                 return
 
             self.tracked_assets = new_tracked_set
@@ -153,6 +153,15 @@ class ExchangeCoordinator:
 
             self.price_watcher_task = asyncio.create_task(self.watch_tickers_loop())
             self.logger.info(f"Price watcher started/restarted for {len(self.tracked_assets) -1} assets.")
+
+            # 3. 변경된 추적 목록을 모든 클라이언트에게 브로드캐스트
+            tracked_coins_message = {
+                'type': 'tracked_coins',
+                'exchange': self.name,
+                'follows': list(self.tracked_assets - {self.quote_currency}) # 기준 통화 제외
+            }
+            await self.app['broadcast_message'](tracked_coins_message)
+            self.logger.info(f"Broadcasted updated tracked coins to all clients: {tracked_coins_message['follows']}")
 
 
     # 외부 API (프론트엔드 호환성 유지)
