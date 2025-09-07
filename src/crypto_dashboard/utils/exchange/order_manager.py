@@ -145,13 +145,23 @@ class OrderManager:
         }
 
         # 스탑 주문 여부 확인 및 로그에 반영
-        # 현재 주문 객체, 캐시된 주문 정보, 또는 was_stop_order 플래그에서 확인
-        current_stop_price = (order.get('stopPrice') or order.get('triggerPrice') or
-                             old_order.get('stop_price'))
+        # 두 줄로 분할하여 None 안전하게 처리
+        stop_price_in_order = order.get('stopPrice')
+        trigger_price_in_order = order.get('triggerPrice')
+        old_stop_price = old_order.get('stop_price')
 
-        was_stop_order = (order.get('stopPrice') is not None or
-                         order.get('triggerPrice') is not None or
-                         old_order.get('was_stop_order', False))
+        # 수치형 값에 대해 0보다 큰지만 확인 (0.0도 스탑 주문으로 취급하지 않음)
+        current_stop_price = None
+        if stop_price_in_order and isinstance(stop_price_in_order, (int, float)) and stop_price_in_order > 0:
+            current_stop_price = stop_price_in_order
+        elif trigger_price_in_order and isinstance(trigger_price_in_order, (int, float)) and trigger_price_in_order > 0:
+            current_stop_price = trigger_price_in_order
+        elif old_stop_price and isinstance(old_stop_price, (int, float)) and old_stop_price > 0:
+            current_stop_price = old_stop_price
+
+        was_stop_order = ((stop_price_in_order is not None and isinstance(stop_price_in_order, (int, float)) and stop_price_in_order > 0) or
+                          (trigger_price_in_order is not None and isinstance(trigger_price_in_order, (int, float)) and trigger_price_in_order > 0) or
+                          old_order.get('was_stop_order', False))
 
         if current_stop_price or was_stop_order:
             order_type = 'STOP'  # 스탑 주문임을 명확히 표시

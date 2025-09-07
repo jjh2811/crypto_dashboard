@@ -8,9 +8,11 @@ import {
 } from '../data/data_store.js';
 
 import {
-    renderCryptoCard, updateOrdersList, updateLogsList, updatePriceDiffs, updateReferencePriceInfo,
+    renderCryptoCard, updateOrdersList, updateLogsList, updateReferencePriceInfo,
     createExchangeTabs, setActiveExchange, showConfirmModal, showAlertModal, hideAlertModal
 } from '../ui/ui_manager.js';
+
+import { updatePriceDiffs } from '../ui/order_manager.js';
 
 import { formatTradeCommandForConfirmation } from '../utils/utils.js';
 
