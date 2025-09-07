@@ -71,6 +71,11 @@ export function openDetailsModal(dataset) {
  * @param {string} time - 참조 시간 문자열.
  */
 export function updateReferencePriceInfo(time) {
+    // reference time 요소가 없으므로 그냥 리턴
+    if (!referenceTimeContainer || !referenceTimeElement) {
+        return;
+    }
+
     if (time) {
         const date = new Date(time);
         referenceTimeElement.textContent = date.toLocaleString();

@@ -64,6 +64,7 @@ async def handle_websocket(request):
         exchange_names = list(exchanges.keys())
         await ws.send_json({'type': 'exchanges_list', 'data': exchange_names})
 
+        # Reference price info - 처음 접속시에만 전송 (가격 상대비율 계산용)
         if app['reference_prices'] and app['reference_time']:
             await ws.send_json({
                 'type': 'reference_price_info',

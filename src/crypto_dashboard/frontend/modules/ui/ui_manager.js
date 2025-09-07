@@ -3,7 +3,8 @@
 import { renderCryptoCard, updateTotalValue } from './crypto_card.js';
 import { updateOrdersList } from './order_manager.js';
 import { updateLogsList } from './log_manager.js';
-import { openDetailsModal, updateReferencePriceInfo, showConfirmModal, hideConfirmModal, showAlertModal, hideAlertModal, hideDetailsModal } from './modal_manager.js';
+// import { openDetailsModal, updateReferencePriceInfo, showConfirmModal, hideConfirmModal, showAlertModal, hideAlertModal, hideDetailsModal } from './modal_manager.js';
+import { openDetailsModal, showConfirmModal, hideConfirmModal, showAlertModal, hideAlertModal, hideDetailsModal } from './modal_manager.js';
 import { createExchangeTabs, setActiveExchange, openTab } from './tab_manager.js';
 
 // Re-export for backward compatibility and central access
@@ -13,7 +14,7 @@ export {
     updateOrdersList,
     updateLogsList,
     openDetailsModal,
-    updateReferencePriceInfo,
+    // updateReferencePriceInfo,  // reference price 제거됨
     createExchangeTabs,
     setActiveExchange,
     openTab,

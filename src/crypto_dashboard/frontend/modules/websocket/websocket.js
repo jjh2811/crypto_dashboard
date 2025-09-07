@@ -8,7 +8,7 @@ import {
 } from '../data/data_store.js';
 
 import {
-    renderCryptoCard, updateOrdersList, updateLogsList, updateReferencePriceInfo,
+    renderCryptoCard, updateOrdersList, updateLogsList,
     createExchangeTabs, setActiveExchange, showConfirmModal, showAlertModal, hideAlertModal
 } from '../ui/ui_manager.js';
 
@@ -130,9 +130,10 @@ export function connectWebSocket() {
                     }
                     break;
                 case 'reference_price_info':
-                    updateReferencePriceInfo(data.time);
+                    // UI 표시 없이 데이터만 저장 (가격 상대비율 계산용)
+                    // updateReferencePriceInfo(data.time);  // UI 표시 함수는 호출하지 않음
                     updateReferencePrices(data.time, data.prices);
-                    // Re-render all visible cards to apply the new reference prices
+                    // 카드 재렌더링으로 상대비율 적용
                     document.querySelectorAll('#crypto-container .crypto-card').forEach(card => {
                         if (card.style.display !== 'none') {
                             // Re-rendering needs a complete data object.
