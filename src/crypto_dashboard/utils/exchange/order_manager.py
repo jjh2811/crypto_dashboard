@@ -207,8 +207,6 @@ class OrderManager:
 
     async def execute_trade_command(self, command: TradeCommand) -> Dict[str, Any]:
         """TradeCommand를 받아 주문 생성 및 실행 (TradeExecutor의 execute 리팩토링)"""
-        self.logger.info(f"Executing trade command: {command}")
-
         if not command.symbol or not command.amount:
             self.logger.error("거래를 실행하려면 symbol과 amount가 반드시 필요합니다.")
             return {"status": "error", "message": "Symbol or amount is missing"}
