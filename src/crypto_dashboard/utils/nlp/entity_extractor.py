@@ -207,7 +207,7 @@ class EntityExtractor:
         if is_english:
             # 영문: 'limit' 주문이면서 명시적인 가격 지정이 없는 경우 True를 반환.
             # Parser에서 최종적으로 price 존재 여부를 확인하여 처리함.
-            if text.lower().startswith('limit'):
+            if re.search(r'\blimit\b', text.lower()):
                 # 상대 가격 지정(e.g. +5%)이 있으면 명시적 가격이 있는 것임
                 if re.search(r'[+-]\d+(?:\.\d+)?', text):
                     return False
