@@ -80,13 +80,7 @@ class NlpTradeManager:
         if not self.parser:
             raise ValueError(f"NLP parser not available for exchange: {self.name}")
 
-        result = await self.parser.parse(text)
-        
-        # TradeCommand 객체가 성공적으로 생성된 경우 로그 기록
-        if hasattr(result, 'intent'):
-            self.logger.info(f"Parsed trade command: {result}")
-            
-        return result
+        return await self.parser.parse(text)
 
     async def execute_command(self, command):
         """거래 명령 실행"""  # 리팩토링: OrderManager 직접 사용

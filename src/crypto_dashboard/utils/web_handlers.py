@@ -198,7 +198,6 @@ async def handle_websocket(request):
 
                         if command_data:
                             trade_command = TradeCommand(**command_data)
-                            logger.info(f"Executing NLP command: {trade_command}")
                             result = await exchange.nlp_trade_manager.execute_command(trade_command)
 
                             # 실행 결과 확인 후 에러 시 프론트엔드로 전송
