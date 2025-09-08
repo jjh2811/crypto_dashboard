@@ -301,9 +301,8 @@ class EntityExtractor:
         for keyword in keywords_to_remove:
             rest_of_text = re.sub(rf'\b{keyword}\b', '', rest_of_text, flags=re.IGNORECASE)
 
-        # 이미 추출된 패턴들 제거 (상대 가격, stop 가격, 총액)
+        # 이미 추출된 패턴들 제거 (상대 가격, 총액)
         patterns_to_remove = [
-            r'stop\s+[+-]?\d+\.?\d*\s*%?',  # stop price
             r'\d+(?:\.\d*)?\s*(?:usdt|dollar|krw|won)\b',  # 10 usdt, 10krw 등
         ]
         
@@ -351,8 +350,9 @@ class EntityExtractor:
         # 숫자를 수량과 가격에 할당
         has_amount_spec = entities.get('total_cost') is not None or entities.get('relative_amount') is not None
         if numbers:
-            # stop_price가 이미 명시적으로 추출되었다면, 해당 숫자는 할당에서 제외
+            # stop_price가 이미 명시적으로 추출되었다면, 해당 숫자는 numbers 리스트에서 제거
             if entities.get('stop_price') is not None and entities['stop_price'] in numbers:
+                # numbers 리스트에서 stop_price와 동일한 첫 번째 값만 제거
                 numbers.remove(entities['stop_price'])
 
             if not has_amount_spec and not entities.get('amount'):

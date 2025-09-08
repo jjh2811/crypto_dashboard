@@ -162,3 +162,13 @@ def test_extract_english_fixed_price_and_relative_stop_price(entity_extractor):
     assert entities["price"] == Decimal("3000")
     assert entities["relative_stop_price"] == Decimal("-5")
     assert entities["order_type"] == "limit"
+
+def test_extract_english_stop_limit_same_price(entity_extractor):
+    text = "buy 0.1 btc 10000 stop 10000"
+    entities = entity_extractor.extract_entities(text)
+    assert entities["intent"] == "buy"
+    assert entities["coin"] == "BTC"
+    assert entities["amount"] == Decimal("0.1")
+    assert entities["price"] == Decimal("10000")
+    assert entities["stop_price"] == Decimal("10000")
+    assert entities["order_type"] == "limit"
