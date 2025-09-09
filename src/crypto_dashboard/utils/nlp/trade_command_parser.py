@@ -213,10 +213,11 @@ class TradeCommandParser:
             self.logger.warning(error_message)
             return error_message
 
-        # amount와 price가 모두 있는 경우 total_cost를 재계산
-        calculated_total_cost = None
+        # 최종 total_cost 결정
+        final_total_cost = total_cost
+        # 지정가 주문처럼 amount와 price가 명확할 때만 total_cost를 재계산하여 덮어쓰기
         if adjusted_amount is not None and adjusted_price is not None:
-            calculated_total_cost = adjusted_amount * adjusted_price
+            final_total_cost = adjusted_amount * adjusted_price
 
         return TradeCommand(
             intent=str(entities["intent"]),
@@ -225,5 +226,5 @@ class TradeCommandParser:
             price=str(adjusted_price) if adjusted_price is not None else None,
             order_type=str(entities["order_type"]),
             stop_price=str(adjusted_stop_price) if adjusted_stop_price is not None else None,
-            total_cost=str(calculated_total_cost) if calculated_total_cost is not None else None
+            total_cost=str(final_total_cost) if final_total_cost is not None else None
         )
