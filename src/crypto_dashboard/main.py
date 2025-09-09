@@ -23,7 +23,7 @@ from .utils.broadcast import (
     basic_broadcast_orders_update,
 )
 from .utils.server_lifecycle import on_cleanup, on_shutdown, on_startup
-from .utils.web_handlers import handle_websocket
+from .utils.web_handlers import handle_websocket, health_check_handler
 
 
 async def index_handler(request):
@@ -96,6 +96,7 @@ def init_app():
 
     # 라우팅 설정
     app.router.add_get('/ws', handle_websocket)
+    app.router.add_get('/health', health_check_handler)
     # 루트 경로로 요청 시 index.html 서빙
     app.router.add_get('/', index_handler) # lambda 대신 index_handler 사용
 

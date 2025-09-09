@@ -14,6 +14,11 @@ from ..models.trade_models import TradeCommand
 from .text_utils import sanitize_input
 
 
+async def health_check_handler(request: web.Request) -> web.Response:
+    """헬스 체크 요청을 처리하는 핸들러"""
+    return web.json_response({"status": "ok"})
+
+
 async def http_handler(request):
     """HTTP 파일 요청 핸들러"""
     filename = request.match_info.get('filename', 'index.html')
