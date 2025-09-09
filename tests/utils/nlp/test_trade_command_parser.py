@@ -18,13 +18,13 @@ def entity_extractor():
     return EntityExtractor(coins, config, logging.getLogger(__name__))
 
 @pytest.fixture
-def mock_exchange_base(mocker):
+def mock_exchange_base():
     mock = MagicMock()
     mock.quote_currency = "USDT"
 
     # Mock exchange attributes and methods
-    mock.exchange.price_to_precision = mocker.MagicMock(side_effect=lambda symbol, price: f"{price:.2f}")
-    mock.exchange.amount_to_precision = mocker.MagicMock(side_effect=lambda symbol, amount: f"{amount:.5f}")
+    mock.exchange.price_to_precision = MagicMock(side_effect=lambda symbol, price: f"{price:.2f}")
+    mock.exchange.amount_to_precision = MagicMock(side_effect=lambda symbol, amount: f"{amount:.5f}")
     mock.exchange.load_markets = AsyncMock()
     # Start with some initial markets
     mock.exchange.markets = {
