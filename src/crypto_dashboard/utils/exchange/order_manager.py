@@ -196,6 +196,29 @@ class OrderManager:
             self.logger.warning(f"Could not handle filled order due to missing data: {order}")
             return
 
+        # 매수로 인해 새로운 자산을 보유하게 되었는지 확인
+        is_new_holding = side == 'buy' and asset not in self.balance_manager.balances_cache
+        if is_new_holding:
+            self.logger.info(f"New asset '{asset}' acquired. Fetching initial price before updating balance.")
+            try:
+                # 가격 정보를 먼저 조회하고 브로드캐스트
+                ticker = await self.exchange.fetch_ticker(symbol)
+                price = ticker.get('last')
+                percentage = ticker.get('percentage', 0.0)
+                
+                if price is not None:
+                    price_update_message = {
+                        'type': 'price_update',
+                        'exchange': self.name,
+                        'symbol': symbol,
+                        'price': float(price),
+                        'percentage': float(percentage)
+                    }
+                    await self.app['broadcast_message'](price_update_message)
+                    self.logger.info(f"Broadcasted initial price for new holding '{asset}': {price}")
+            except Exception as e:
+                self.logger.warning(f"Could not fetch initial price for new holding {symbol}: {e}")
+
         self.logger.info(f"Handling filled order: {side} {trade_amount} {asset} at {trade_price}")
 
         if side == 'buy':
@@ -214,8 +237,34 @@ class OrderManager:
             return {"status": "error", "message": "Symbol or amount is missing"}
 
         try:
-            # create_order에 필요한 파라미터들 준비
             symbol = command.symbol
+            asset = symbol.split('/')[0]
+
+            # 새로운 코인인지 확인
+            is_new_coin = asset not in self.coordinator.tracked_assets
+
+            if is_new_coin:
+                self.logger.info(f"New coin '{asset}' detected. Fetching price before creating order.")
+                try:
+                    # 가격 정보를 먼저 조회하고 브로드캐스트
+                    ticker = await self.exchange.fetch_ticker(symbol)
+                    price = ticker.get('last')
+                    percentage = ticker.get('percentage', 0.0)
+                    
+                    if price is not None:
+                        price_update_message = {
+                            'type': 'price_update',
+                            'exchange': self.name,
+                            'symbol': symbol,
+                            'price': float(price),
+                            'percentage': float(percentage)
+                        }
+                        await self.app['broadcast_message'](price_update_message)
+                        self.logger.info(f"Broadcasted initial price for new coin '{asset}': {price}")
+                except Exception as e:
+                    self.logger.warning(f"Could not fetch initial price for {symbol}: {e}. Proceeding with order creation.")
+
+            # create_order에 필요한 파라미터들 준비
             order_type = command.order_type
             side = command.intent
             amount = float(command.amount)
@@ -231,6 +280,10 @@ class OrderManager:
             self.logger.info(f"Creating {order_type} order: {side} {amount} {symbol} at price {price} with params {params}")
             order = await self.exchange.create_order(symbol, order_type, side, amount, price, params)
             self.logger.info("Successfully created order")
+
+            # 주문 생성 후 watch_orders가 이벤트를 받아 처리하므로 별도 브로드캐스트 불필요.
+            # watch_orders 핸들러가 update_tracked_assets_and_restart_watcher를 호출하여
+            # 신규 코인이 tracked_assets에 추가되고 가격 감시가 시작됨.
 
             return {
                 "status": "success",
