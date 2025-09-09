@@ -45,7 +45,7 @@ function createLogElement(data) {
     }
 
     // 스탑 주문 정보 표시
-    if (logData.order_type === 'STOP' && logData.stop_price) {
+    if (logData.stop_price) {
         messageText += ` | Stop Price: ${formatNumber(parseFloat(logData.stop_price))}`;
     }
 

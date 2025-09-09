@@ -163,9 +163,11 @@ class OrderManager:
                           (trigger_price_in_order is not None and isinstance(trigger_price_in_order, (int, float)) and trigger_price_in_order > 0) or
                           old_order.get('was_stop_order', False))
 
+        # 1. 실제 주문 유형(limit/market)을 먼저 설정
+        log_payload['order_type'] = order.get('type')
+
+        # 2. 스탑 가격이 존재하면, payload에 추가
         if current_stop_price or was_stop_order:
-            order_type = 'STOP'  # 스탑 주문임을 명확히 표시
-            log_payload['order_type'] = order_type
             if current_stop_price:
                 log_payload['stop_price'] = float(current_stop_price)
 
@@ -226,13 +228,7 @@ class OrderManager:
                 self.logger.info(f"Stop price found: {command.stop_price}")
 
             # 실제 주문 실행
-            if 'stopPrice' in params or 'triggerPrice' in params:
-                # 스탑 주문 수행
-                order_type_text = 'STOP'  # 스탑 주문임을 명확히 표시
-                self.logger.info(f"Creating {order_type_text} order: {side} {amount} {symbol} at price {price} with stop price {params.get('stopPrice') or params.get('triggerPrice')} with params {params}")
-            else:
-                # 일반 주문
-                self.logger.info(f"Creating {order_type} order: {side} {amount} {symbol} at price {price} with params {params}")
+            self.logger.info(f"Creating {order_type} order: {side} {amount} {symbol} at price {price} with params {params}")
             order = await self.exchange.create_order(symbol, order_type, side, amount, price, params)
             self.logger.info("Successfully created order")
 
