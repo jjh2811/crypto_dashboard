@@ -60,8 +60,14 @@ export function formatTradeCommandForConfirmation(command) {
     const coinSymbol = symbol && symbol.includes('/') ? symbol.split('/')[0] : (symbol || 'Unknown');
     const marketSymbol = symbol.includes('/') ? symbol : `${symbol}/USDT`; // 이미 퀴터 세퍼레이트포가 있으면 그대로 사용
 
-    const currentPrices = getCurrentPrices();
-    const currentPrice = currentPrices[marketSymbol];
+    // 1. command 객체에서 직접 current_price를 사용합니다.
+    let currentPrice = command.current_price;
+
+    // 2. current_price가 없으면 기존 방식으로 fallback합니다.
+    if (currentPrice === undefined || currentPrice === null) {
+        const currentPrices = getCurrentPrices();
+        currentPrice = currentPrices[marketSymbol];
+    }
 
     let htmlParts = [
         '<div class="trade-confirmation">',

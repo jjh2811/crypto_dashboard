@@ -1,7 +1,10 @@
+from dataclasses import asdict, is_dataclass
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from ...utils.nlp.entity_extractor import EntityExtractor
 from ...utils.nlp.trade_command_parser import TradeCommandParser
+from ...models.trade_models import TradeCommand
+
 
 if TYPE_CHECKING:
     from ...exchange_coordinator import ExchangeCoordinator
@@ -76,17 +79,48 @@ class NlpTradeManager:
         return self.parser is not None
 
     async def parse_command(self, text: str):
-        """자연어 텍스트를 파싱하여 거래 명령으로 변환"""
+        """자연어 텍스트를 파싱하여 거래 명령으로 변환하고, 현재가를 추가합니다."""
         if not self.parser:
             raise ValueError(f"NLP parser not available for exchange: {self.name}")
 
         result = await self.parser.parse(text)
+
+        # TradeCommand 객체가 아니면 (예: 에러 메시지) 그대로 반환
+        if not isinstance(result, TradeCommand):
+            return result
+
+        self.logger.info(f"Parsed trade command: {result}")
+
+        # 현재가 정보 가져오기
+        current_price = None
+        asset = result.symbol.split('/')[0]
         
-        # TradeCommand 객체가 성공적으로 생성된 경우 로그 기록
-        if hasattr(result, 'intent'):
-            self.logger.info(f"Parsed trade command: {result}")
-            
+        # 1. 추적 중인 자산인지 확인 (캐시 우선)
+        if asset in self.coordinator.balance_manager.balances_cache:
+            cached_price = self.coordinator.balance_manager.balances_cache[asset].get('price')
+            if cached_price and cached_price > 0:
+                current_price = float(cached_price)
+                self.logger.debug(f"Using cached price for {asset}: {current_price}")
+
+        # 2. 캐시에 없으면 API로 조회
+        if current_price is None:
+            try:
+                self.logger.debug(f"Fetching ticker for untracked asset: {result.symbol}")
+                ticker = await self.exchange.fetch_ticker(result.symbol)
+                if ticker and 'last' in ticker and ticker['last'] is not None:
+                    current_price = float(ticker['last'])
+                    self.logger.debug(f"Successfully fetched price for {result.symbol}: {current_price}")
+                else:
+                    self.logger.warning(f"Could not find 'last' price in ticker for {result.symbol}")
+            except Exception as e:
+                # API 조회 실패 시 콘솔에만 에러를 기록하고 계속 진행
+                self.logger.error(f"Failed to fetch ticker for {result.symbol}, proceeding without price info: {e}")
+
+        # TradeCommand 객체에 직접 현재가 설정
+        result.current_price = current_price
+        
         return result
+
 
     async def execute_command(self, command):
         """거래 명령 실행"""  # 리팩토링: OrderManager 직접 사용

@@ -17,3 +17,4 @@ class TradeCommand:
     order_type: str  # "market" or "limit"
     stop_price: Optional[str] = None  # Stop 주문의 트리거 가격
     total_cost: Optional[str] = None  # 총 주문 비용
+    current_price: Optional[float] = None # 주문 확인 시점의 현재가
