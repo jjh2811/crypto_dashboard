@@ -13,7 +13,7 @@ class ExchangeCoordinator:
 
     def __init__(self, api_key: str, secret_key: str, app: web.Application, exchange_name: str):
         self.name = exchange_name
-        self.logger = logging.getLogger(f'crypto_dashboard.exchange.{self.name}')
+        self.logger = logging.getLogger(exchange_name)
         self.app = app
         self.config = app['config'].get('exchanges', {}).get(self.name.lower(), {})
 
