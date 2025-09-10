@@ -108,7 +108,7 @@ async def logout(request):
 @web.middleware
 async def auth_middleware(request, handler):
     # 로그인/로그아웃 페이지 및 정적 파일은 예외
-    if request.path in ("/login", "/logout", "/style.css", "/script.js"):
+    if request.path in ("/login", "/logout", "/health"):
         return await handler(request)
 
     token = request.cookies.get(COOKIE_NAME)
