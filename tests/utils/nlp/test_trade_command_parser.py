@@ -3,7 +3,7 @@ from decimal import Decimal
 import logging
 from unittest.mock import AsyncMock, MagicMock
 
-from src.crypto_dashboard.models.trade_models import TradeCommand
+from src.crypto_dashboard.models.trade_models import TradeIntent
 from src.crypto_dashboard.utils.nlp.entity_extractor import EntityExtractor
 from src.crypto_dashboard.utils.nlp.trade_command_parser import TradeCommandParser
 
@@ -49,7 +49,7 @@ def trade_command_parser(entity_extractor, mock_exchange_base):
 async def test_parse_simple_limit_buy(trade_command_parser):
     text = "buy 1 btc 90"
     command = await trade_command_parser.parse(text)
-    assert isinstance(command, TradeCommand)
+    assert isinstance(command, TradeIntent)
     assert command.intent == "buy"
     assert command.symbol == "BTC/USDT"
     assert command.amount == "1.00000"
@@ -60,7 +60,7 @@ async def test_parse_simple_limit_buy(trade_command_parser):
 async def test_parse_relative_price_and_stop_price(trade_command_parser):
     text = "buy 1 btc -10% stop -15%"
     command = await trade_command_parser.parse(text)
-    assert isinstance(command, TradeCommand)
+    assert isinstance(command, TradeIntent)
     assert command.intent == "buy"
     assert command.symbol == "BTC/USDT"
     assert command.amount == "1.00000"
@@ -74,7 +74,7 @@ async def test_parse_relative_price_and_stop_price(trade_command_parser):
 async def test_parse_fixed_stop_price(trade_command_parser):
     text = "buy 1 btc 90 stop 85"
     command = await trade_command_parser.parse(text)
-    assert isinstance(command, TradeCommand)
+    assert isinstance(command, TradeIntent)
     assert command.intent == "buy"
     assert command.symbol == "BTC/USDT"
     assert command.amount == "1.00000"
@@ -86,7 +86,7 @@ async def test_parse_fixed_stop_price(trade_command_parser):
 async def test_parse_fixed_price_and_relative_stop_price(trade_command_parser):
     text = "buy 1 btc 90 stop -5%"
     command = await trade_command_parser.parse(text)
-    assert isinstance(command, TradeCommand)
+    assert isinstance(command, TradeIntent)
     assert command.intent == "buy"
     assert command.symbol == "BTC/USDT"
     assert command.amount == "1.00000"
@@ -99,7 +99,7 @@ async def test_parse_fixed_price_and_relative_stop_price(trade_command_parser):
 async def test_parse_relative_price_and_fixed_stop_price(trade_command_parser):
     text = "buy 1 btc -10% stop 85"
     command = await trade_command_parser.parse(text)
-    assert isinstance(command, TradeCommand)
+    assert isinstance(command, TradeIntent)
     assert command.intent == "buy"
     assert command.symbol == "BTC/USDT"
     assert command.amount == "1.00000"
@@ -112,7 +112,7 @@ async def test_parse_relative_price_and_fixed_stop_price(trade_command_parser):
 async def test_parse_stop_market_order(trade_command_parser):
     text = "sell 1 btc stop 105"
     command = await trade_command_parser.parse(text)
-    assert isinstance(command, TradeCommand)
+    assert isinstance(command, TradeIntent)
     assert command.intent == "sell"
     assert command.symbol == "BTC/USDT"
     assert command.amount == "1.00000"
@@ -127,7 +127,7 @@ async def test_parse_total_cost_order(trade_command_parser, mock_exchange_base):
     mock_exchange_base.price_manager.get_current_price = AsyncMock(return_value=100.0)
     
     command = await trade_command_parser.parse(text)
-    assert isinstance(command, TradeCommand)
+    assert isinstance(command, TradeIntent)
     assert command.intent == "buy"
     assert command.symbol == "BTC/USDT"
     # 1000 usdt / 100.0 price = 10
@@ -141,7 +141,7 @@ async def test_parse_relative_amount_order(trade_command_parser, mock_exchange_b
     mock_exchange_base.balances_cache.get.return_value = {'free': Decimal('20')}
 
     command = await trade_command_parser.parse(text)
-    assert isinstance(command, TradeCommand)
+    assert isinstance(command, TradeIntent)
     assert command.intent == "sell"
     assert command.symbol == "XRP/USDT"
     # 50% of 20 is 10
@@ -188,7 +188,7 @@ async def test_market_refresh_on_unknown_coin(trade_command_parser, mock_exchang
     mock_exchange_base.exchange.load_markets.assert_called_once_with(reload=True)
 
     # Assert the command was parsed correctly after the refresh
-    assert isinstance(command, TradeCommand), f"Parsing failed, returned: {command}"
+    assert isinstance(command, TradeIntent), f"Parsing failed, returned: {command}"
     assert command.symbol == "DOGE/USDT"
     assert command.amount == "100.00000"
     assert command.price == "0.10"
