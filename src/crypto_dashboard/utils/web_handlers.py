@@ -159,18 +159,18 @@ async def handle_websocket(request):
                         if msg_type in ('cancel_orders', 'cancel_all_orders', 'nlp_command', 'nlp_execute'):
                             continue
 
-                    exchange = exchanges.get(exchange_name)
+                    coordinator = exchanges.get(exchange_name)
 
                     if msg_type == 'cancel_orders':
                         orders_to_cancel = data.get('orders', [])
-                        logger.info(f"Received request to cancel {len(orders_to_cancel)} orders on {exchange.name}.")
+                        logger.info(f"Received request to cancel {len(orders_to_cancel)} orders on {coordinator.name}.")
                         for order in orders_to_cancel:
-                            await exchange.cancel_order(order['id'], order['symbol'])
-                        await app['broadcast_orders_update'](exchange)
+                            await coordinator.cancel_order(order['id'], order['symbol'])
+                        await app['broadcast_orders_update'](coordinator)
 
                     elif msg_type == 'cancel_all_orders':
-                        logger.info(f"Received request to cancel all orders on {exchange.name}.")
-                        await exchange.cancel_all_orders()
+                        logger.info(f"Received request to cancel all orders on {coordinator.name}.")
+                        await coordinator.cancel_all_orders()
 
                     elif msg_type == 'nlp_command':
                         raw_text = data.get('text', '')
@@ -179,12 +179,12 @@ async def handle_websocket(request):
                             await ws.send_json({'type': 'nlp_error', 'message': '잘못된 입력입니다.'})
                             continue
 
-                        if not exchange or not exchange.is_nlp_ready():
+                        if not coordinator or not coordinator.is_nlp_ready():
                             logger.error(f"NLP not ready for exchange: {exchange_name}")
                             await ws.send_json({'type': 'nlp_error', 'message': f'{exchange_name}의 자연어 처리기가 준비되지 않았습니다.'})
                             continue
 
-                        result = await exchange.nlp_trade_manager.parse_command(text)
+                        result = await coordinator.nlp_trade_manager.parse_command(text)
                         if isinstance(result, TradeCommand):
                             await ws.send_json({
                                 'type': 'nlp_trade_confirm',
@@ -197,17 +197,17 @@ async def handle_websocket(request):
 
                     elif msg_type == 'nlp_execute':
                         command_data = data.get('command')
-                        if not exchange or not exchange.is_nlp_ready():
+                        if not coordinator or not coordinator.is_nlp_ready():
                             logger.error(f"NLP not ready for exchange: {exchange_name}")
                             await ws.send_json({'type': 'nlp_error', 'message': f'{exchange_name}의 거래 실행기가 준비되지 않았습니다.'})
                             continue
 
                         if command_data:
                             trade_command = TradeCommand(**command_data)
-                            result = await exchange.nlp_trade_manager.execute_command(trade_command)
+                            result = await coordinator.nlp_trade_manager.execute_command(trade_command)
 
                             # 실행 결과 확인 후 에러 시 프론트엔드로 전송
-                            await app['broadcast_log'](result, exchange.name, exchange.logger)
+                            await app['broadcast_log'](result, coordinator.name, coordinator.logger)
 
                             if result.get('status') == 'error':
                                 error_message = result.get('message', '거래 실행 중 알 수 없는 에러가 발생했습니다.')
@@ -232,11 +232,11 @@ async def handle_websocket(request):
         if not clients:
             logger.info("Last client disconnected. Storing current prices as reference.")
             app['reference_prices'] = {}
-            for exchange_name, exchange in exchanges.items():
+            for exchange_name, coordinator in exchanges.items():
                 exchange_reference_prices = {
                     symbol: float(data['price'])
-                    for symbol, data in exchange.balance_manager.balances_cache.items()
-                    if 'price' in data and symbol != getattr(exchange, 'quote_currency', 'USDT')
+                    for symbol, data in coordinator.balance_manager.balances_cache.items()
+                    if 'price' in data and symbol != getattr(coordinator, 'quote_currency', 'USDT')
                 }
                 if exchange_reference_prices:
                     app['reference_prices'][exchange_name] = exchange_reference_prices
