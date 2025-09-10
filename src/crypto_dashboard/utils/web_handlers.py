@@ -4,6 +4,7 @@ HTTP 및 WebSocket 핸들러들을 제공합니다.
 """
 import asyncio
 from dataclasses import asdict
+from datetime import datetime, timezone
 import json
 import os
 import mimetypes
@@ -241,10 +242,8 @@ async def handle_websocket(request):
                     app['reference_prices'][exchange_name] = exchange_reference_prices
 
             if app['reference_prices']:
-                from datetime import datetime, timezone
                 app['reference_time'] = datetime.now(timezone.utc).isoformat()
-                logger.info(f"Reference prices saved at {app['reference_time']} for {list(app['reference_prices'].keys())}")
+                logger.info(f"Reference prices saved for {list(app['reference_prices'].keys())}")
             else:
-                app['reference_time'] = None
                 logger.info("No assets to track for reference pricing.")
     return ws
