@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation
 import logging
 from typing import Optional, Tuple
 
-from ...models.trade_models import TradeCommand
+from ...models.trade_models import TradeIntent
 from .entity_extractor import EntityExtractor
 
 
@@ -40,8 +40,8 @@ class TradeCommandParser:
 
         return value, None
 
-    async def parse(self, text: str) -> Optional[TradeCommand] | str:
-        """주어진 텍스트를 파싱하여 TradeCommand 객체로 변환합니다."""
+    async def parse(self, text: str) -> Optional[TradeIntent] | str:
+        """주어진 텍스트를 파싱하여 TradeIntent 객체로 변환합니다."""
         entities = self.extractor.extract_entities(text)
         # 코인을 찾지 못한 경우 마켓 정보를 갱신하고 다시 시도
         should_refresh_markets = False
@@ -219,7 +219,7 @@ class TradeCommandParser:
         if adjusted_amount is not None and adjusted_price is not None:
             final_total_cost = adjusted_amount * adjusted_price
 
-        return TradeCommand(
+        return TradeIntent(
             intent=str(entities["intent"]),
             symbol=market_symbol,
             amount=str(adjusted_amount) if adjusted_amount is not None else None,

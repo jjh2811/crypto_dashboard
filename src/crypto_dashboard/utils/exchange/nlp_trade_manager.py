@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from ...utils.nlp.entity_extractor import EntityExtractor
 from ...utils.nlp.trade_command_parser import TradeCommandParser
-from ...models.trade_models import TradeCommand
+from ...models.trade_models import TradeCommand, TradeIntent
 
 
 if TYPE_CHECKING:
@@ -79,47 +79,51 @@ class NlpTradeManager:
         return self.parser is not None
 
     async def parse_command(self, text: str):
-        """자연어 텍스트를 파싱하여 거래 명령으로 변환하고, 현재가를 추가합니다."""
+        """자연어 텍스트를 파싱하여 거래 의도로 변환하고, 현재가를 추가하여 최종 거래 명령을 생성합니다."""
         if not self.parser:
             raise ValueError(f"NLP parser not available for exchange: {self.name}")
 
-        result = await self.parser.parse(text)
+        intent_result = await self.parser.parse(text)
 
-        # TradeCommand 객체가 아니면 (예: 에러 메시지) 그대로 반환
-        if not isinstance(result, TradeCommand):
-            return result
+        # TradeIntent 객체가 아니면 (예: 에러 메시지) 그대로 반환
+        if not isinstance(intent_result, TradeIntent):
+            return intent_result
 
-        self.logger.info(f"Parsed trade command: {result}")
+        self.logger.info(f"Parsed trade intent: {intent_result}")
 
         # 현재가 정보 가져오기
         current_price = None
-        asset = result.symbol.split('/')[0]
-        
-        # 1. 추적 중인 자산인지 확인 (캐시 우선)
-        if asset in self.coordinator.balance_manager.balances_cache:
-            cached_price = self.coordinator.balance_manager.balances_cache[asset].get('price')
-            if cached_price and cached_price > 0:
-                current_price = float(cached_price)
-                self.logger.debug(f"Using cached price for {asset}: {current_price}")
+        if intent_result.symbol:
+            asset = intent_result.symbol.split('/')[0]
+            
+            # 1. 추적 중인 자산인지 확인 (캐시 우선)
+            if asset in self.coordinator.balance_manager.balances_cache:
+                cached_price = self.coordinator.balance_manager.balances_cache[asset].get('price')
+                if cached_price and cached_price > 0:
+                    current_price = float(cached_price)
+                    self.logger.debug(f"Using cached price for {asset}: {current_price}")
 
-        # 2. 캐시에 없으면 API로 조회
-        if current_price is None:
-            try:
-                self.logger.debug(f"Fetching ticker for untracked asset: {result.symbol}")
-                ticker = await self.exchange.fetch_ticker(result.symbol)
-                if ticker and 'last' in ticker and ticker['last'] is not None:
-                    current_price = float(ticker['last'])
-                    self.logger.debug(f"Successfully fetched price for {result.symbol}: {current_price}")
-                else:
-                    self.logger.warning(f"Could not find 'last' price in ticker for {result.symbol}")
-            except Exception as e:
-                # API 조회 실패 시 콘솔에만 에러를 기록하고 계속 진행
-                self.logger.error(f"Failed to fetch ticker for {result.symbol}, proceeding without price info: {e}")
+            # 2. 캐시에 없으면 API로 조회
+            if current_price is None:
+                try:
+                    self.logger.debug(f"Fetching ticker for untracked asset: {intent_result.symbol}")
+                    ticker = await self.exchange.fetch_ticker(intent_result.symbol)
+                    if ticker and 'last' in ticker and ticker['last'] is not None:
+                        current_price = float(ticker['last'])
+                        self.logger.debug(f"Successfully fetched price for {intent_result.symbol}: {current_price}")
+                    else:
+                        self.logger.warning(f"Could not find 'last' price in ticker for {intent_result.symbol}")
+                except Exception as e:
+                    # API 조회 실패 시 콘솔에만 에러를 기록하고 계속 진행
+                    self.logger.error(f"Failed to fetch ticker for {intent_result.symbol}, proceeding without price info: {e}")
 
-        # TradeCommand 객체에 직접 현재가 설정
-        result.current_price = current_price
+        # TradeIntent와 현재가 정보를 결합하여 TradeCommand 객체 생성
+        trade_command = TradeCommand(
+            **asdict(intent_result),
+            current_price=current_price
+        )
         
-        return result
+        return trade_command
 
 
     async def execute_command(self, command):
