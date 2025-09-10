@@ -278,7 +278,13 @@ class OrderManager:
 
             # 실제 주문 실행
             self.logger.info(f"Creating {order_type} order: {side} {amount} {symbol} at price {price} with params {params}")
-            order = await self.exchange.create_order(symbol, order_type, side, amount, price, params)
+            
+            # WebSocket 주문을 지원하는지 확인하여 분기 처리
+            if self.exchange.has.get('createOrderWs'):
+                order = await self.exchange.create_order_ws(symbol, order_type, side, amount, price, params)
+            else:
+                order = await self.exchange.create_order(symbol, order_type, side, amount, price, params)
+
             self.logger.info("Successfully created order")
 
             # 주문 생성 후 watch_orders가 이벤트를 받아 처리하므로 별도 브로드캐스트 불필요.
