@@ -47,6 +47,9 @@ function createLogElement(data) {
     // 스탑 주문 정보 표시
     if (logData.stop_price) {
         messageText += ` | Stop Price: ${formatNumber(parseFloat(logData.stop_price))}`;
+        if (logData.is_triggered !== undefined) {
+            messageText += logData.is_triggered ? ' (Triggered)' : ' (Not Triggered)';
+        }
     }
 
     // 수수료 정보 추가

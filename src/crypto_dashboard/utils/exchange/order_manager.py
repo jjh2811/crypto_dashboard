@@ -207,10 +207,11 @@ class OrderManager:
         # 1. 실제 주문 유형(limit/market)을 먼저 설정
         log_payload['order_type'] = order.get('type')
 
-        # 2. 스탑 가격이 존재하면, payload에 추가
-        if current_stop_price or was_stop_order:
+        # 2. 스탑 가격이 존재하고, 주문 상태가 'open'일 때만 payload에 추가
+        if status == 'open' and (current_stop_price or was_stop_order):
             if current_stop_price:
                 log_payload['stop_price'] = float(current_stop_price)
+            log_payload['is_triggered'] = self._is_order_triggered(order)
 
         # 수수료 정보 추가
         if 'fee' in order and order['fee'] is not None:
