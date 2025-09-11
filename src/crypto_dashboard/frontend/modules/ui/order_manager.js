@@ -66,7 +66,8 @@ function createOrderCardHTML(order, currentPrice) {
     const orderDecimalPlaces = valueFormats[order.exchange] ?? 3;
 
     let stopPriceHTML = '';
-    if (order.stop_price !== null && order.stop_price !== undefined && parseFloat(order.stop_price) !== 0) {
+    // 스탑 가격이 있고, 아직 트리거되지 않은 경우에만 Stop Price 행을 표시
+    if (order.stop_price && !order.is_triggered) {
         let stopDiffText = '-';
         let stopDiffClass = '';
         if (currentPrice && order.stop_price) {
@@ -81,9 +82,12 @@ function createOrderCardHTML(order, currentPrice) {
             }
             stopDiffText = `${stopDiffPercent.toFixed(2)}%`;
         }
+
+        const label = "Stop Price:";
+
         stopPriceHTML = `
             <div class="info-row stop-price-row">
-                <span class="info-label">Stop Price:</span>
+                <span class="info-label">${label}</span>
                 <span class="info-value">${formatNumber(order.stop_price)} <span class="price-diff ${stopDiffClass}">(${stopDiffText})</span></span>
             </div>`;
     }
@@ -137,12 +141,20 @@ function createOrderCardHTML(order, currentPrice) {
  * @param {number} currentPrice - 현재 가격.
  */
 function updateOrderCard(card, order, currentPrice) {
-    const { amount, filled, price, side, exchange, stop_price } = order;
+    const { amount, filled, price, side, exchange, stop_price, is_triggered } = order;
     const orderDecimalPlaces = valueFormats[exchange] ?? 3;
 
-    // Update Stop Price
+    // 스탑 주문 상태에 따라 카드 스타일 업데이트
+    const isPendingStop = stop_price && !is_triggered;
+    if (isPendingStop) {
+        card.classList.add('order-card--pending-stop');
+    } else {
+        card.classList.remove('order-card--pending-stop');
+    }
+
+    // Update Stop Price Row
     let stopPriceRow = card.querySelector('.stop-price-row');
-    if (stop_price !== null && stop_price !== undefined && parseFloat(stop_price) !== 0) {
+    if (isPendingStop) {
         if (!stopPriceRow) {
             // Add the stop price row if it doesn't exist
             const priceRow = card.querySelector('.price-row');
@@ -167,13 +179,14 @@ function updateOrderCard(card, order, currentPrice) {
                 }
                 stopDiffText = `${stopDiffPercent.toFixed(2)}%`;
             }
+            const label = "Stop Price:";
             stopPriceRow.innerHTML = `
-                <span class="info-label">Stop Price:</span>
+                <span class="info-label">${label}</span>
                 <span class="info-value">${formatNumber(stop_price)} <span class="price-diff ${stopDiffClass}">(${stopDiffText})</span></span>
             `;
         }
     } else if (stopPriceRow) {
-        // Remove the stop price row if it exists but is no longer needed
+        // 스탑 주문이 아니거나 트리거된 경우, Stop Price 행을 제거
         stopPriceRow.remove();
     }
 
@@ -313,6 +326,10 @@ export function updateOrdersList() {
 
             orderCard = document.createElement("div");
             orderCard.className = "crypto-card";
+            // 스탑 주문이고 트리거되지 않은 경우, pending 클래스 추가
+            if (order.stop_price && !order.is_triggered) {
+                orderCard.classList.add('order-card--pending-stop');
+            }
             orderCard.dataset.orderId = orderId;
             orderCard.dataset.exchange = order.exchange;
             orderCard.innerHTML = createOrderCardHTML(order, currentPrice);

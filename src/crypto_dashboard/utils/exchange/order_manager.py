@@ -1,6 +1,7 @@
 import asyncio
+import json
 from decimal import Decimal
-from typing import Any, Dict, Set, TYPE_CHECKING
+from typing import Any, Dict, Set, TYPE_CHECKING, Optional
 
 from ...models.trade_models import TradeCommand
 
@@ -22,6 +23,44 @@ class OrderManager:
 
         # 캐시 데이터 초기화
         self.orders_cache: Dict[str, Dict[str, Any]] = {}
+        
+        # 설정 파일 로드
+        with open('src/crypto_dashboard/config.json', 'r') as f:
+            self.config = json.load(f)
+
+    @staticmethod
+    def _get_nested_value(data: Dict[str, Any], path: str) -> Optional[Any]:
+        """점(.)으로 구분된 경로 문자열을 사용해 중첩된 딕셔너리에서 값을 가져옵니다."""
+        keys = path.split('.')
+        value = data
+        for key in keys:
+            if isinstance(value, dict):
+                value = value.get(key)
+            else:
+                return None
+        return value
+
+    def _is_order_triggered(self, order: Dict[str, Any]) -> bool:
+        """설정 파일에 정의된 조건 목록에 따라 스탑 주문이 트리거되었는지 확인합니다."""
+        if not order.get('stopPrice'):
+            return False
+
+        exchange_config = self.config.get('exchanges', {}).get(self.name, {})
+        conditions = exchange_config.get('stop_trigger_conditions')
+
+        # 조건이 리스트 형태가 아니면 처리하지 않음
+        if not isinstance(conditions, list):
+            return False
+
+        # 조건 리스트를 순회하며 하나라도 맞으면 True 반환
+        for condition in conditions:
+            if isinstance(condition, dict) and 'path' in condition and 'expected_value' in condition:
+                actual_value = self._get_nested_value(order, condition['path'])
+                if actual_value is not None and actual_value == condition['expected_value']:
+                    return True # 조건 중 하나라도 일치하면 즉시 True 반환
+        
+        # 모든 조건이 맞지 않으면 False 반환
+        return False
 
     async def initialize_orders(self, open_orders: list) -> None:
         """초기 주문 상태 초기화"""
@@ -42,7 +81,8 @@ class OrderManager:
                     'filled': float(filled),
                     'value': float(price * (amount - filled)), # 미체결 수량 기준 가치
                     'timestamp': order.get('timestamp'),
-                    'status': order.get('status')
+                    'status': order.get('status'),
+                    'is_triggered': self._is_order_triggered(order)
                 }
         self.logger.info(f"Initialized {len(open_orders)} open orders.")
 
@@ -128,7 +168,8 @@ class OrderManager:
                 'value': float(price * (amount - new_filled)),
                 'timestamp': order.get('timestamp'),
                 'status': status,
-                'was_stop_order': bool(stop_price)  # 스탑 주문 여부 플래그
+                'was_stop_order': bool(stop_price),  # 스탑 주문 여부 플래그
+                'is_triggered': self._is_order_triggered(order)
             }
 
         # 프론트엔드에 주문 목록 업데이트 브로드캐스트

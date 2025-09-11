@@ -9,7 +9,11 @@
       "testnet": {
         "use": false,
         "whitelist": ["BTC", "USDT"]
-      }
+      },
+      "stop_trigger_conditions": [
+        { "path": "info.w", "expected_value": true },
+        { "path": "info.isWorking", "expected_value": true }
+      ]
     },
     "upbit": {
       "quote_currency": "KRW",
