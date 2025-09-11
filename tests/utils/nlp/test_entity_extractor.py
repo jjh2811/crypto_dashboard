@@ -172,3 +172,13 @@ def test_extract_english_stop_limit_same_price(entity_extractor):
     assert entities["price"] == Decimal("10000")
     assert entities["stop_price"] == Decimal("10000")
     assert entities["order_type"] == "limit"
+
+def test_extract_korean_stop_limit_order_with_stopga(entity_extractor):
+    text = "비트코인 1개 60000에 매수 스탑가 59000"
+    entities = entity_extractor.extract_entities(text)
+    assert entities["intent"] == "buy"
+    assert entities["coin"] == "BTC"
+    assert entities["amount"] == Decimal("1")
+    assert entities["price"] == Decimal("60000")
+    assert entities["stop_price"] == Decimal("59000")
+    assert entities["order_type"] == "limit"

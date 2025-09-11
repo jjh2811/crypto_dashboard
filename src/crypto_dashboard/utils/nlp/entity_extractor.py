@@ -156,7 +156,8 @@ class EntityExtractor:
                 masked_text = text
                 
                 # stop price 관련 부분 마스킹
-                masked_text = re.sub(r'stop\s+[+-]?\d+\.?\d*\s*%?', '', masked_text, flags=re.IGNORECASE)
+                stop_pattern = r'(?:stop|스탑|스탑가|스톱|스톱가)\s+[+-]?\d+\.?\d*\s*%?'
+                masked_text = re.sub(stop_pattern, '', masked_text, flags=re.IGNORECASE)
 
                 # 총액 패턴 마스킹 ("10000원어치")
                 masked_text = re.sub(r'\b\d+(?:\.\d+)?\s*(?:원|달러|usdt)\s*어치\b', ' MASKED_COST ', masked_text, re.IGNORECASE)
@@ -274,7 +275,8 @@ class EntityExtractor:
         text = expand_k_suffix(text)
         try:
             # "stop" 키워드 뒤에 오는 숫자 추출 (상대값 패턴이 아닌 경우)
-            match = re.search(r'stop\s+(?![+-])(\d+\.?\d*)', text, re.IGNORECASE)
+            stop_pattern = r'(?:stop|스탑|스탑가|스톱|스톱가)\s+(?![+-])(\d+\.?\d*)'
+            match = re.search(stop_pattern, text, re.IGNORECASE)
             if match:
                 return Decimal(match.group(1))
         except InvalidOperation:
@@ -285,7 +287,8 @@ class EntityExtractor:
         """텍스트에서 상대적 stop 주문 가격을 추출"""
         try:
             # "stop" 키워드 뒤에 오는 상대 가격(+/-) 추출
-            match = re.search(r'stop\s+([+-]\d+\.?\d*)\s*%?', text, re.IGNORECASE)
+            stop_pattern = r'(?:stop|스탑|스탑가|스톱|스톱가)\s+([+-]\d+\.?\d*)\s*%?'
+            match = re.search(stop_pattern, text, re.IGNORECASE)
             if match:
                 return Decimal(match.group(1))
         except InvalidOperation:
