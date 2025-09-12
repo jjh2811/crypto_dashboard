@@ -47,10 +47,9 @@ class EntityExtractor:
 
     def _is_english(self, text: str) -> bool:
         """입력된 텍스트가 영어 명령어인지 간단히 확인합니다."""
-        english_keywords = ['market', 'limit', 'buy', 'sell']
-        # 한글이 없고, 영어 키워드로 시작하는 경우 영어로 간주
+        # 한글이 없으면 영어로 간주
         has_korean = any('가' <= char <= '힣' for char in text)
-        return not has_korean and any(text.lower().startswith(keyword) for keyword in english_keywords)
+        return not has_korean
 
     def _extract_intent(self, text: str, is_english: bool) -> Optional[str]:
         """텍스트에서 거래 의도(매수/매도)를 추출"""
