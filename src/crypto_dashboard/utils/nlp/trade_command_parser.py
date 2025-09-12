@@ -46,27 +46,18 @@ class TradeCommandParser:
         # 코인을 찾지 못한 경우 마켓 정보를 갱신하고 다시 시도
         should_refresh_markets = False
         if entities.get("intent") and entities.get("coin") is None:
-            order_type = entities.get("order_type", "market")
+            # 수량 조건: amount 또는 relative_amount 또는 total_cost
+            amount_condition = (entities.get("amount") is not None or
+                              entities.get("relative_amount") is not None or
+                              entities.get("total_cost") is not None)
+            # 가격 조건: price 또는 relative_price 또는 current_price_order
+            price_condition = (entities.get("price") is not None or
+                              entities.get("relative_price") is not None or
+                              entities.get("current_price_order") is True)
 
-            if order_type == "limit":  # 지정가 주문
-                # 수량 조건: amount 또는 relative_amount 또는 total_cost
-                amount_condition = (entities.get("amount") is not None or
-                                  entities.get("relative_amount") is not None or
-                                  entities.get("total_cost") is not None)
-                # 가격 조건: price 또는 relative_price 또는 current_price_order
-                price_condition = (entities.get("price") is not None or
-                                  entities.get("relative_price") is not None or
-                                  entities.get("current_price_order") is True)
-
-                if amount_condition and price_condition:
-                    should_refresh_markets = True
-
-            elif order_type == "market":  # 시장가 주문
-                # 수량 조건: amount 또는 relative_amount 또는 total_cost
-                if (entities.get("amount") is not None or
-                    entities.get("relative_amount") is not None or
-                    entities.get("total_cost") is not None):
-                    should_refresh_markets = True
+            # 수량 정보가 있으면 마켓 갱신 시도
+            if amount_condition:
+                should_refresh_markets = True
 
         if should_refresh_markets:
             self.logger.info("코인을 찾지 못했지만 다른 주문 정보는 있습니다. 마켓 정보를 갱신하고 다시 시도합니다.")

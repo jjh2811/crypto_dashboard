@@ -258,17 +258,6 @@ class EntityExtractor:
                 return percentage_match.group(1)
         return None
 
-    def _extract_order_type(self, text: str, is_english: bool) -> str:
-        """주문 타입을 추출"""
-        if is_english:
-            # 영문: "market" 또는 "limit" 명시적 추출
-            match = re.search(r'\b(market|limit)\b', text.lower())
-            if match:
-                return match.group(1)
-
-        # 기본값은 market (한글은 가격 조건에 따라 나중에 변경)
-        return "market"
-
     def _extract_stop_price(self, text: str, is_english: bool) -> Optional[Decimal]:
         """텍스트에서 stop 주문 가격을 추출 (절대값)"""
         text = expand_k_suffix(text)
@@ -297,9 +286,9 @@ class EntityExtractor:
     def _process_english_tokens(self, text: str, entities: Dict[str, Any]) -> None:
         """영문 명령어의 토큰 기반 처리"""
         text = expand_k_suffix(text)
-        # order_type과 intent 제거 후 나머지 토큰 추출
+        # intent 제거 후 나머지 토큰 추출
         rest_of_text = text
-        keywords_to_remove = ['market', 'limit', 'buy', 'sell'] # 'stop'은 아래에서 별도 처리
+        keywords_to_remove = ['buy', 'sell'] # 'stop'은 아래에서 별도 처리
         for keyword in keywords_to_remove:
             rest_of_text = re.sub(rf'\b{keyword}\b', '', rest_of_text, flags=re.IGNORECASE)
 
@@ -394,7 +383,6 @@ class EntityExtractor:
         entities["current_price_order"] = self._extract_current_price_order(clean_input, is_english)
         entities["relative_price"] = self._extract_relative_price(clean_input, is_english)
         entities["relative_amount"] = self._extract_relative_amount(clean_input, is_english)
-        entities["order_type"] = self._extract_order_type(clean_input, is_english)
 
         # 영문의 경우 토큰 기반 추가 처리
         if is_english:
