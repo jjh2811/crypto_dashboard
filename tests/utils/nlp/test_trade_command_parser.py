@@ -192,3 +192,50 @@ async def test_market_refresh_on_unknown_coin(trade_command_parser, mock_exchang
     assert command.symbol == "DOGE/USDT"
     assert command.amount == "100.00000"
     assert command.price == "0.10"
+
+@pytest.mark.asyncio
+async def test_parse_oco_limit_stop_market_buy_order(trade_command_parser, mock_exchange_base):
+    # Set current price to 100.5 for this test
+    mock_exchange_base.price_manager.get_current_price = AsyncMock(return_value=100.5)
+    
+    # Buy order where price (95) < current_price (100.5) and stop_price (105) > current_price (100.5)
+    text = "buy btc 10usdt 95 stop 105"
+    command = await trade_command_parser.parse(text)
+    
+    assert isinstance(command, TradeIntent)
+    assert command.intent == "buy"
+    assert command.symbol == "BTC/USDT"
+    # amount is calculated from total_cost (10) / price (95) = 0.10526
+    assert command.amount == "0.10526" 
+    assert command.price == "95.00"
+    assert command.stop_price == "105.00"
+    assert command.order_type == "oco"
+
+@pytest.mark.asyncio
+async def test_parse_oco_limit_stop_market_sell_order(trade_command_parser, mock_exchange_base):
+    # Set current price to 100.5 for this test
+    mock_exchange_base.price_manager.get_current_price = AsyncMock(return_value=100.5)
+    
+    # Sell order where price (105) > current_price (100.5) and stop_price (95) < current_price (100.5)
+    text = "sell 1 btc 105 stop 95"
+    command = await trade_command_parser.parse(text)
+    
+    assert isinstance(command, TradeIntent)
+    assert command.intent == "sell"
+    assert command.symbol == "BTC/USDT"
+    assert command.amount == "1.00000"
+    assert command.price == "105.00"
+    assert command.stop_price == "95.00"
+    assert command.order_type == "oco"
+
+@pytest.mark.asyncio
+async def test_parse_not_oco_buy_order(trade_command_parser, mock_exchange_base):
+    # Set current price to 100.5 for this test
+    mock_exchange_base.price_manager.get_current_price = AsyncMock(return_value=100.5)
+    
+    # This is a standard stop-limit order, not OCO, because price > current_price
+    text = "buy 1 btc 102 stop 105"
+    command = await trade_command_parser.parse(text)
+    
+    assert isinstance(command, TradeIntent)
+    assert command.order_type == "limit" # Not "oco"

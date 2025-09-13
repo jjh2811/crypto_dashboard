@@ -182,3 +182,59 @@ def test_extract_korean_stop_limit_order_with_stopga(entity_extractor):
     assert entities["price"] == Decimal("60000")
     assert entities["stop_price"] == Decimal("59000")
     assert entities["order_type"] == "limit"
+
+def test_extract_english_oco_stop_limit_order_absolute(entity_extractor):
+    text = "buy btc 10usdt 100k stop 110k limit 105k"
+    entities = entity_extractor.extract_entities(text)
+    assert entities["intent"] == "buy"
+    assert entities["coin"] == "BTC"
+    assert entities["total_cost"] == Decimal("10")
+    assert entities["price"] == Decimal("100000")
+    assert entities["stop_price"] == Decimal("110000")
+    assert entities["stop_limit_price"] == Decimal("105000")
+    assert entities["relative_price"] is None
+    assert entities["relative_stop_price"] is None
+    assert entities["relative_stop_limit_price"] is None
+    assert entities["order_type"] == "limit"
+
+def test_extract_english_oco_stop_limit_order_relative(entity_extractor):
+    text = "buy btc 10usdt -5% stop +5% limit +3%"
+    entities = entity_extractor.extract_entities(text)
+    assert entities["intent"] == "buy"
+    assert entities["coin"] == "BTC"
+    assert entities["total_cost"] == Decimal("10")
+    assert entities["price"] is None
+    assert entities["stop_price"] is None
+    assert entities["stop_limit_price"] is None
+    assert entities["relative_price"] == Decimal("-5")
+    assert entities["relative_stop_price"] == Decimal("5")
+    assert entities["relative_stop_limit_price"] == Decimal("3")
+    assert entities["order_type"] == "limit"
+
+def test_extract_limit_keyword_not_in_oco_pattern(entity_extractor):
+    text = "limit buy btc 10usdt 100k stop 105k"
+    entities = entity_extractor.extract_entities(text)
+    assert entities["intent"] == "buy"
+    assert entities["coin"] == "BTC"
+    assert entities["total_cost"] == Decimal("10")
+    assert entities["price"] == Decimal("100000")
+    assert entities["stop_price"] == Decimal("105000")
+    # Crucially, stop_limit_price should not be extracted
+    assert entities["stop_limit_price"] is None
+    assert entities["relative_stop_limit_price"] is None
+    assert entities["order_type"] == "limit"
+
+def test_extract_korean_oco_stop_limit_order(entity_extractor):
+    # A complete OCO stop-limit order with a primary price, stop price, and stop-limit price.
+    text = "비트코인 1개 45000에 매수 스탑 50000 지정가 49000"
+    entities = entity_extractor.extract_entities(text)
+    assert entities["intent"] == "buy"
+    assert entities["coin"] == "BTC"
+    assert entities["amount"] == Decimal("1")
+    # The primary order price is 45000
+    assert entities["price"] == Decimal("45000")
+    # The OCO part
+    assert entities["stop_price"] == Decimal("50000")
+    assert entities["stop_limit_price"] == Decimal("49000")
+    # The order type should be 'limit' because a primary price is specified.
+    assert entities["order_type"] == "limit"

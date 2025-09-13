@@ -91,12 +91,16 @@ class TradeCommandParser:
         # 변수 초기화
         final_price = entities.get("price")
         final_stop_price = entities.get("stop_price")
+        final_stop_limit_price = entities.get("stop_limit_price")
         final_amount = entities.get("amount")
         total_cost = entities.get("total_cost")
+        order_type = str(entities["order_type"])
 
-        # 상대 가격 및 상대 스탑 가격 처리를 위한 기준 가격 가져오기
+        # 상대 가격 처리를 위한 기준 가격 가져오기
         base_price_for_relative = None
-        if entities.get("relative_price") is not None or entities.get("relative_stop_price") is not None:
+        if (entities.get("relative_price") is not None or
+                entities.get("relative_stop_price") is not None or
+                entities.get("relative_stop_limit_price") is not None):
             order_book = await self.exchange_base.price_manager.get_order_book(coin_symbol)
             if order_book:
                 intent = str(entities["intent"])
@@ -126,6 +130,16 @@ class TradeCommandParser:
                 f"상대 스탑 가격 주문: {coin_symbol} 기준가({base_price_for_relative}) 대비 {relative_stop_price_percentage:+}% -> "
                 f"스탑 가격 {calculated_stop_price}"
             )
+            
+        # 상대 스탑 리밋 가격 주문 처리
+        if entities.get("relative_stop_limit_price") is not None and base_price_for_relative is not None:
+            relative_stop_limit_price_percentage = entities["relative_stop_limit_price"]
+            calculated_stop_limit_price = base_price_for_relative * (Decimal('1') + relative_stop_limit_price_percentage / Decimal('100'))
+            final_stop_limit_price = calculated_stop_limit_price
+            self.logger.info(
+                f"상대 스탑 리밋 가격 주문: {coin_symbol} 기준가({base_price_for_relative}) 대비 {relative_stop_limit_price_percentage:+}% -> "
+                f"스탑 리밋 가격 {calculated_stop_limit_price}"
+            )
 
         # 암시적 현재가 주문 처리
         elif entities.get("current_price_order") and final_price is None:
@@ -139,6 +153,27 @@ class TradeCommandParser:
                 error_message = f"'{coin_symbol}'의 호가를 가져올 수 없어 현재가 주문을 처리할 수 없습니다."
                 self.logger.error(error_message)
                 return error_message
+
+        # OCO 주문 유형 결정
+        if final_stop_limit_price is not None:
+            order_type = "oco_stop_limit"
+        elif final_price is not None and final_stop_price is not None:
+            current_price_num = await self.exchange_base.price_manager.get_current_price(coin_symbol)
+            if current_price_num:
+                current_price = Decimal(str(current_price_num))
+                is_oco = False
+                intent = str(entities["intent"])
+                if intent == 'buy' and final_price < current_price and final_stop_price > current_price:
+                    is_oco = True
+                elif intent == 'sell' and final_price > current_price and final_stop_price < current_price:
+                    is_oco = True
+                
+                if is_oco:
+                    self.logger.info(f"OCO Limit/Stop-Market order detected. Price: {final_price}, Stop: {final_stop_price}, Current: {current_price}")
+                    order_type = "oco"
+            else:
+                self.logger.warning(f"Could not fetch current price for {coin_symbol} to check for OCO order.")
+
 
         if final_amount is None and entities.get("relative_amount") is None and total_cost is None:
             error_message = f"Parse failed for text: '{text}'. Missing amount information."
@@ -198,6 +233,9 @@ class TradeCommandParser:
 
         adjusted_stop_price, stop_price_error = self._adjust_precision(final_stop_price, market_symbol, 'price')
         if stop_price_error: return stop_price_error
+        
+        adjusted_stop_limit_price, stop_limit_price_error = self._adjust_precision(final_stop_limit_price, market_symbol, 'price')
+        if stop_limit_price_error: return stop_limit_price_error
 
         if adjusted_amount is not None and adjusted_amount <= Decimal('0'):
             error_message = f"계산된 거래 수량이 0 이하({adjusted_amount})이므로 거래를 진행할 수 없습니다."
@@ -215,7 +253,8 @@ class TradeCommandParser:
             symbol=market_symbol,
             amount=str(adjusted_amount) if adjusted_amount is not None else None,
             price=str(adjusted_price) if adjusted_price is not None else None,
-            order_type=str(entities["order_type"]),
+            order_type=order_type,
             stop_price=str(adjusted_stop_price) if adjusted_stop_price is not None else None,
+            stop_limit_price=str(adjusted_stop_limit_price) if adjusted_stop_limit_price is not None else None,
             total_cost=str(final_total_cost) if final_total_cost is not None else None
         )

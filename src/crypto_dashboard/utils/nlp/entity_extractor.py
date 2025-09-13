@@ -283,6 +283,68 @@ class EntityExtractor:
             return None
         return None
 
+    def _extract_oco_prices(self, text: str, is_english: bool) -> Dict[str, Optional[Decimal]]:
+        """
+        Extracts prices for OCO orders (stop_price, stop_limit_price).
+        Looks for 'stop <price> limit <price>' pattern.
+        Handles both absolute and relative prices in English and Korean.
+        """
+        oco_prices: Dict[str, Optional[Decimal]] = {
+            "stop_price": None,
+            "relative_stop_price": None,
+            "stop_limit_price": None,
+            "relative_stop_limit_price": None,
+        }
+
+        if is_english:
+            stop_keyword = r'stop'
+            limit_keyword = r'limit'
+        else:
+            stop_keyword = r'(?:스탑|스탑가|스톱|스톱가)'
+            limit_keyword = r'(?:지정|지정가)'
+
+        # Pattern for the price part, allowing for k/m suffixes and percentages
+        price_value_pattern = r'[+-]?\d*\.?\d+%?k?m?'
+        
+        # The full regex pattern with capturing groups for the prices
+        # Added .*? to allow for optional words like '가격' or '원' between the numbers and keywords
+        oco_pattern = rf'{stop_keyword}\s+({price_value_pattern})\s*.*?{limit_keyword}\s+({price_value_pattern})'
+        
+        match = re.search(oco_pattern, text, re.IGNORECASE)
+
+        if not match:
+            return oco_prices
+
+        stop_price_str = match.group(1)
+        limit_price_str = match.group(2)
+        self.logger.info(f"OCO pattern matched: stop='{stop_price_str}', limit='{limit_price_str}'")
+
+        # Parse stop price
+        try:
+            expanded_stop_price = expand_k_suffix(stop_price_str)
+            if '%' in expanded_stop_price:
+                oco_prices["relative_stop_price"] = Decimal(expanded_stop_price.replace('%', ''))
+            elif expanded_stop_price.startswith(('+', '-')):
+                oco_prices["relative_stop_price"] = Decimal(expanded_stop_price)
+            else:
+                oco_prices["stop_price"] = Decimal(expanded_stop_price)
+        except InvalidOperation:
+            self.logger.warning(f"Could not parse OCO stop price: {stop_price_str}")
+
+        # Parse limit price
+        try:
+            expanded_limit_price = expand_k_suffix(limit_price_str)
+            if '%' in expanded_limit_price:
+                oco_prices["relative_stop_limit_price"] = Decimal(expanded_limit_price.replace('%', ''))
+            elif expanded_limit_price.startswith(('+', '-')):
+                oco_prices["relative_stop_limit_price"] = Decimal(expanded_limit_price)
+            else:
+                oco_prices["stop_limit_price"] = Decimal(expanded_limit_price)
+        except InvalidOperation:
+            self.logger.warning(f"Could not parse OCO limit price: {limit_price_str}")
+
+        return oco_prices
+
     def _process_english_tokens(self, text: str, entities: Dict[str, Any]) -> None:
         """영문 명령어의 토큰 기반 처리"""
         text = expand_k_suffix(text)
@@ -369,16 +431,36 @@ class EntityExtractor:
             "intent": None, "coin": None, "amount": None, "price": None,
             "relative_price": None, "relative_amount": None, "total_cost": None,
             "current_price_order": False, "order_type": "market", "stop_price": None,
-            "relative_stop_price": None
+            "relative_stop_price": None, "stop_limit_price": None, "relative_stop_limit_price": None
         }
+
+        # OCO 주문 처리 (영어/한글 공통)
+        oco_prices = self._extract_oco_prices(clean_input, is_english)
+        if oco_prices.get("stop_price") or oco_prices.get("relative_stop_price"):
+            entities.update(oco_prices)
+            # OCO 패턴이 처리되었으므로, 다른 추출기가 재처리하지 않도록 마스킹
+            if is_english:
+                stop_keyword = r'stop'
+                limit_keyword = r'limit'
+            else:
+                stop_keyword = r'(?:스탑|스탑가|스톱|스톱가)'
+                limit_keyword = r'(?:지정|지정가)'
+            price_value_pattern = r'[+-]?\d*\.?\d+%?k?m?'
+            oco_pattern = rf'{stop_keyword}\s+({price_value_pattern})\s*.*?{limit_keyword}\s+({price_value_pattern})'
+            clean_input = re.sub(oco_pattern, ' OCO_PROCESSED ', clean_input, flags=re.IGNORECASE)
+            self.logger.info("OCO prices extracted, masking the pattern for further processing.")
 
         # 각 엔터티 추출 (언어별 로직 적용)
         entities["intent"] = self._extract_intent(clean_input, is_english)
         entities["coin"] = self._extract_coin(clean_input, is_english)
         entities["amount"] = self._extract_amount(clean_input, is_english)
         entities["price"] = self._extract_price(clean_input, is_english)
-        entities["stop_price"] = self._extract_stop_price(clean_input, is_english)
-        entities["relative_stop_price"] = self._extract_relative_stop_price(clean_input, is_english)
+        
+        # OCO가 아닌 경우에만 일반 스탑 가격 추출
+        if not (entities.get("stop_price") or entities.get("relative_stop_price")):
+            entities["stop_price"] = self._extract_stop_price(clean_input, is_english)
+            entities["relative_stop_price"] = self._extract_relative_stop_price(clean_input, is_english)
+
         entities["total_cost"] = self._extract_total_cost(clean_input, is_english)
         entities["current_price_order"] = self._extract_current_price_order(clean_input, is_english)
         entities["relative_price"] = self._extract_relative_price(clean_input, is_english)
