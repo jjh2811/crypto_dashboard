@@ -209,7 +209,7 @@ async def test_parse_oco_limit_stop_market_buy_order(trade_command_parser, mock_
     assert command.amount == "0.10526" 
     assert command.price == "95.00"
     assert command.stop_price == "105.00"
-    assert command.order_type == "oco"
+    assert command.order_type == "oco_stop_market"
 
 @pytest.mark.asyncio
 async def test_parse_oco_limit_stop_market_sell_order(trade_command_parser, mock_exchange_base):
@@ -226,7 +226,7 @@ async def test_parse_oco_limit_stop_market_sell_order(trade_command_parser, mock
     assert command.amount == "1.00000"
     assert command.price == "105.00"
     assert command.stop_price == "95.00"
-    assert command.order_type == "oco"
+    assert command.order_type == "oco_stop_market"
 
 @pytest.mark.asyncio
 async def test_parse_not_oco_buy_order(trade_command_parser, mock_exchange_base):
@@ -239,3 +239,22 @@ async def test_parse_not_oco_buy_order(trade_command_parser, mock_exchange_base)
     
     assert isinstance(command, TradeIntent)
     assert command.order_type == "limit" # Not "oco"
+
+@pytest.mark.asyncio
+async def test_parse_oco_stop_limit_buy_order(trade_command_parser, mock_exchange_base):
+    # Set current price and order book specifically for this test
+    mock_exchange_base.price_manager.get_current_price = AsyncMock(return_value=100000.0)
+    mock_exchange_base.price_manager.get_order_book = AsyncMock(return_value={'bid': 100000.0, 'ask': 100001.0})
+    
+    # Buy order with stop_limit_price using 'limit +5'
+    text = "buy 0.1 btc 95k stop 110000 limit +5"
+    command = await trade_command_parser.parse(text)
+    
+    assert isinstance(command, TradeIntent)
+    assert command.intent == "buy"
+    assert command.symbol == "BTC/USDT"
+    assert command.amount == "0.10000"
+    assert command.price == "95000.00"
+    assert command.stop_price == "110000.00"
+    assert command.stop_limit_price == "105000.00" # 100000 * (1 + 5/100)
+    assert command.order_type == "oco_stop_limit"

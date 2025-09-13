@@ -155,22 +155,19 @@ class TradeCommandParser:
                 return error_message
 
         # OCO 주문 유형 결정
-        if final_stop_limit_price is not None:
-            order_type = "oco_stop_limit"
-        elif final_price is not None and final_stop_price is not None:
+        if final_price is not None and final_stop_price is not None:
             current_price_num = await self.exchange_base.price_manager.get_current_price(coin_symbol)
             if current_price_num:
                 current_price = Decimal(str(current_price_num))
-                is_oco = False
                 intent = str(entities["intent"])
-                if intent == 'buy' and final_price < current_price and final_stop_price > current_price:
-                    is_oco = True
-                elif intent == 'sell' and final_price > current_price and final_stop_price < current_price:
-                    is_oco = True
-                
-                if is_oco:
-                    self.logger.info(f"OCO Limit/Stop-Market order detected. Price: {final_price}, Stop: {final_stop_price}, Current: {current_price}")
-                    order_type = "oco"
+                if (intent == 'buy' and final_price < current_price and final_stop_price > current_price) or \
+                   (intent == 'sell' and final_price > current_price and final_stop_price < current_price):
+                    if final_stop_limit_price is not None:
+                        order_type = "oco_stop_limit"
+                        self.logger.info(f"OCO Stop-Limit order detected. Price: {final_price}, Stop: {final_stop_price}, Stop-Limit: {final_stop_limit_price}, Current: {current_price}")
+                    else:
+                        order_type = "oco_stop_market"
+                        self.logger.info(f"OCO Stop-Market order detected. Price: {final_price}, Stop: {final_stop_price}, Current: {current_price}")
             else:
                 self.logger.warning(f"Could not fetch current price for {coin_symbol} to check for OCO order.")
 
