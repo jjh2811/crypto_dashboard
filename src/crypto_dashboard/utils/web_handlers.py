@@ -220,7 +220,7 @@ async def handle_websocket(request):
                 except json.JSONDecodeError:
                     logger.warning(f"Received non-JSON message: {msg.data}")
                 except Exception as e:
-                    logger.error(f"Error processing websocket message: {e}", exc_info=True)
+                    logger.error(f"Error processing websocket message: {e}")
 
             elif msg.type == web.WSMsgType.ERROR:
                 logger.error(f'ws connection closed with exception {ws.exception()}')

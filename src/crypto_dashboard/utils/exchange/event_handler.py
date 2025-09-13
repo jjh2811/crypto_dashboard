@@ -77,7 +77,7 @@ class EventHandler:
                 self.logger.info(f"Balance watch loop for {self.name} cancelled.")
                 break
             except Exception as e:
-                self.logger.error(f"Error in {self.name} balance watch loop: {e}", exc_info=True)
+                self.logger.error(f"Error in {self.name} balance watch loop: {e}")
                 await asyncio.sleep(5)
 
     async def watch_orders_loop(self) -> None:
@@ -93,5 +93,5 @@ class EventHandler:
                 self.logger.info(f"Order watch loop for {self.name} cancelled.")
                 break
             except Exception as e:
-                self.logger.error(f"Error in {self.name} orders watch loop: {e}", exc_info=True)
+                self.logger.error(f"Error in {self.name} orders watch loop: {e}")
                 await asyncio.sleep(5)

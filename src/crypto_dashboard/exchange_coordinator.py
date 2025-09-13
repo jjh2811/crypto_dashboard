@@ -101,7 +101,7 @@ class ExchangeCoordinator:
 
 
         except Exception as e:
-            self.logger.error(f"Failed to fetch initial data from {self.name}: {e}", exc_info=True)
+            self.logger.error(f"Failed to fetch initial data from {self.name}: {e}")
             await self.exchange.close()
             raise
 

@@ -77,5 +77,5 @@ async def calculate_average_buy_price(
         return None, realised_pnl
 
     except Exception as e:
-        logger.error(f"Error calculating average buy price for {asset}: {e}", exc_info=True)
+        logger.error(f"Error calculating average buy price for {asset}: {e}")
         return None, None

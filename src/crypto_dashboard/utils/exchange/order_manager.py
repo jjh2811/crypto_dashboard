@@ -339,5 +339,5 @@ class OrderManager:
             }
 
         except Exception as e:
-            self.logger.error(f"Order creation failed: {e}", exc_info=True)
+            self.logger.error(f"Order creation failed: {e}")
             return {"status": "error", "message": f"An unexpected error occurred: {e}"}

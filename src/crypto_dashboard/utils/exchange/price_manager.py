@@ -96,7 +96,7 @@ class PriceManager:
                 self.logger.info("Ticker watch loop cancelled.")
                 break # 루프 정상 종료
             except Exception as e:
-                self.logger.error(f"An error occurred in price watch loop for {self.name}: {e}", exc_info=True)
+                self.logger.error(f"An error occurred in price watch loop for {self.name}: {e}")
                 await asyncio.sleep(5) # 에러 발생 시 잠시 대기 후 재시도
 
     def get_tracked_symbols(self) -> List[str]:

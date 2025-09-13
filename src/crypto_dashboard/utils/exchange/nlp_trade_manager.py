@@ -71,7 +71,7 @@ class NlpTradeManager:
             self.logger.info(f"NLP trader initialized successfully for {self.name}.")
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize NLP trader for {self.name}: {e}", exc_info=True)
+            self.logger.error(f"Failed to initialize NLP trader for {self.name}: {e}")
             raise
 
     def is_ready(self) -> bool:
