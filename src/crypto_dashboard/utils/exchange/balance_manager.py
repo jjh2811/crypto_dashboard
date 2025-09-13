@@ -57,6 +57,14 @@ class BalanceManager:
                     self.logger
                 )
 
+                # Format avg_buy_price if it exists
+                if avg_buy_price is not None:
+                    formatted_avg_price_str = self.exchange.price_to_precision(
+                        symbol=f"{asset}/{self.quote_currency}",
+                        price=float(avg_buy_price)
+                    )
+                    avg_buy_price = Decimal(formatted_avg_price_str)
+
                 free_amount = Decimal(str(balance.get('free', {}).get(asset, 0)))
                 locked_amount = Decimal(str(balance.get('used', {}).get(asset, 0)))
 
@@ -87,19 +95,10 @@ class BalanceManager:
         avg_buy_price = balance_data.get('avg_buy_price')
         realised_pnl = balance_data.get('realised_pnl')
 
-        # Get decimal places from config for rounding for display
-        exchanges_config = self.app.get('config', {}).get('exchanges', {})
-        decimal_places = exchanges_config.get(self.name, {}).get('value_decimal_places', 3)
-
-        formatted_avg_buy_price = None
-        if avg_buy_price is not None:
-            # Send at full precision without rounding
-            formatted_avg_buy_price = float(avg_buy_price)
-
-        formatted_realised_pnl = None
-        if realised_pnl is not None:
-            # Send at full precision without rounding
-            formatted_realised_pnl = float(realised_pnl)
+        # The avg_buy_price and realised_pnl are now pre-formatted.
+        # We just need to convert them to float for the message.
+        formatted_avg_buy_price = float(avg_buy_price) if avg_buy_price is not None else None
+        formatted_realised_pnl = float(realised_pnl) if realised_pnl is not None else None
 
         message = {
             'type': 'portfolio_update',
@@ -192,7 +191,17 @@ class BalanceManager:
             new_avg_price = (old_cost + fill_cost) / new_total_amount if new_total_amount > 0 else average_price
 
         balances['avg_buy_price'] = new_avg_price
-        self.logger.info(f"Average price for {asset} updated to {new_avg_price} after buy.")
+
+        # Format avg_buy_price to the correct precision
+        if balances['avg_buy_price'] is not None:
+            symbol = f"{asset}/{self.quote_currency}"
+            formatted_avg_price_str = self.exchange.price_to_precision(
+                symbol=symbol,
+                price=float(balances['avg_buy_price'])
+            )
+            balances['avg_buy_price'] = Decimal(formatted_avg_price_str)
+
+        self.logger.info(f"Average price for {asset} updated to {balances['avg_buy_price']} after buy.")
 
         # 업데이트된 잔고 정보 브로드캐스트
         update_message = self.create_portfolio_update_message(asset, balances)
