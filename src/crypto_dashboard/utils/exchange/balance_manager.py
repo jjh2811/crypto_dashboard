@@ -41,7 +41,8 @@ class BalanceManager:
                 'total_amount': Decimal('0'),
                 'price': Decimal('0'),
                 'avg_buy_price': None,
-                'realised_pnl': None
+                'realised_pnl': Decimal('0'),
+                'unrealised_pnl': Decimal('0')
             }
             self.logger.info(f"[{self.name}] Added dummy balance for follow: {asset}")
 
@@ -74,7 +75,8 @@ class BalanceManager:
                     'total_amount': free_amount + locked_amount,
                     'price': Decimal('1.0') if asset == self.quote_currency else Decimal('0'),
                     'avg_buy_price': avg_buy_price,
-                    'realised_pnl': realised_pnl
+                    'realised_pnl': realised_pnl if realised_pnl is not None else Decimal('0'),
+                    'unrealised_pnl': Decimal('0')
                 }
 
                 self.logger.info(f"Asset: {asset}, Avg Buy Price: {avg_buy_price if avg_buy_price is not None else 'N/A'}, Realised PnL: {realised_pnl}")
@@ -95,19 +97,22 @@ class BalanceManager:
         avg_buy_price = balance_data.get('avg_buy_price')
         realised_pnl = balance_data.get('realised_pnl')
 
-        # The avg_buy_price and realised_pnl are now pre-formatted.
-        # We just need to convert them to float for the message.
-        formatted_avg_buy_price = float(avg_buy_price) if avg_buy_price is not None else None
-        formatted_realised_pnl = float(realised_pnl) if realised_pnl is not None else None
+        # Format realised_pnl based on config before sending
+        if realised_pnl is not None:
+            decimal_places = self.coordinator.config.get('value_decimal_places', 3)
+            quantizer = Decimal('1e-' + str(decimal_places))
+            formatted_realised_pnl_str = str(realised_pnl.quantize(quantizer))
+        else:
+            formatted_realised_pnl_str = None
 
         message = {
             'type': 'portfolio_update',
             'exchange': self.name,
             'symbol': symbol,
-            'free': float(free_amount),
-            'locked': float(locked_amount),
-            'avg_buy_price': formatted_avg_buy_price,
-            'realised_pnl': formatted_realised_pnl,
+            'free': str(free_amount),
+            'locked': str(locked_amount),
+            'avg_buy_price': str(avg_buy_price) if avg_buy_price is not None else None,
+            'realised_pnl': formatted_realised_pnl_str,
         }
         return message
 
@@ -234,3 +239,21 @@ class BalanceManager:
         # 업데이트된 잔고 정보 브로드캐스트
         update_message = self.create_portfolio_update_message(asset, balances)
         await self.app['broadcast_message'](update_message)
+
+    def update_unrealised_pnl(self, asset: str, current_price: Decimal) -> Optional[Decimal]:
+        """미실현 손익을 계산하고 캐시를 업데이트합니다."""
+        if asset not in self.balances_cache:
+            return None
+
+        balances = self.balances_cache[asset]
+        avg_buy_price = balances.get('avg_buy_price')
+        total_amount = balances.get('total_amount', Decimal('0'))
+
+        # 평단가가 없거나(None), 0이하 거나, 총 수량이 0이하일 경우 미실현 손익은 0
+        if avg_buy_price is None or avg_buy_price <= 0 or total_amount <= 0:
+            balances['unrealised_pnl'] = Decimal('0')
+            return balances['unrealised_pnl']
+
+        unrealised_pnl = (current_price - avg_buy_price) * total_amount
+        balances['unrealised_pnl'] = unrealised_pnl
+        return unrealised_pnl

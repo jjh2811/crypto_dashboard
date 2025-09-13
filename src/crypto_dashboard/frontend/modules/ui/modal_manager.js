@@ -17,6 +17,17 @@ const referenceTimeElement = document.getElementById("reference-time");
  * @param {object} dataset - 암호화폐 카드 데이터셋.
  */
 export function openDetailsModal(dataset) {
+    updateDetailsModalContent(dataset); // 내용 업데이트 함수 호출
+    // 모달에 현재 표시중인 코인의 ID 저장
+    modal.dataset.currentCryptoId = `${dataset.exchange}_${dataset.symbol}`;
+    modal.style.display = "block";
+}
+
+/**
+ * 상세 모달의 내용을 업데이트합니다.
+ * @param {object} dataset - 최신 데이터셋.
+ */
+export function updateDetailsModalContent(dataset) {
     const symbol = dataset.symbol;
     const baseSymbol = symbol.includes('/') ? symbol.split('/')[0] : symbol;
     const exchange = dataset.exchange;
@@ -37,11 +48,7 @@ export function openDetailsModal(dataset) {
         }
         const pnlClass = pnl >= 0 ? 'profit-positive' : 'profit-negative';
         const pnlSign = pnl > 0 ? '+' : '';
-        const decimalPlaces = valueFormats[exchange] ?? 3;
-        const formattedPnl = pnl.toLocaleString('en-US', {
-            minimumFractionDigits: decimalPlaces,
-            maximumFractionDigits: decimalPlaces
-        });
+        const formattedPnl = pnl; // 포맷팅 제거, 실수 값 그대로 사용
         return `<span class="info-value ${pnlClass}">${pnlSign}${formattedPnl}</span>`;
     };
 
@@ -59,11 +66,6 @@ export function openDetailsModal(dataset) {
             ${formatPnl(realised_pnl, exchange)}
         </div>
     `;
-
-    // 모달에 현재 표시중인 코인의 ID 저장
-    modal.dataset.currentCryptoId = `${exchange}_${symbol}`;
-
-    modal.style.display = "block";
 }
 
 /**

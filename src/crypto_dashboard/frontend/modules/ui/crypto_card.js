@@ -203,7 +203,8 @@ export function renderCryptoCard(data) {
     });
     // Store calculated unrealised_pnl in dataset for the modal
     if (unrealised_pnl !== null) {
-        card.dataset.unrealised_pnl = unrealised_pnl;
+        const unrealised_pnl = parseFloat(data.unrealised_pnl || 0);
+    card.dataset.unrealised_pnl = unrealised_pnl;
     }
 
 

@@ -9,7 +9,7 @@ import {
 
 import {
     renderCryptoCard, updateOrdersList, updateLogsList,
-    createExchangeTabs, setActiveExchange, showConfirmModal, showAlertModal, hideAlertModal
+    createExchangeTabs, setActiveExchange, showConfirmModal, showAlertModal, hideAlertModal, updateDetailsModalContent
 } from '../ui/ui_manager.js';
 
 import { updatePriceDiffs } from '../ui/order_manager.js';
@@ -81,10 +81,20 @@ export function connectWebSocket() {
                         realised_pnl,
                         price,
                         value,
-                        // Preserve price_change_percent if it exists
-                        price_change_percent: card ? card.dataset.price_change_percent : undefined
+                        // Preserve price_change_percent and unrealised_pnl if it exists
+                        price_change_percent: card ? card.dataset.price_change_percent : undefined,
+                        unrealised_pnl: card ? card.dataset.unrealised_pnl : '0'
                     };
                     renderCryptoCard(renderData);
+
+                    // 만약 상세 모달이 열려있고, 해당 코인의 모달이라면 내용 즉시 업데이트
+                    const modal = document.getElementById("details-modal");
+                    if (modal.style.display === "block" && modal.dataset.currentCryptoId === uniqueId) {
+                        const updatedCard = document.getElementById(uniqueId);
+                        if (updatedCard) { // 카드가 DOM에 존재하는지 확인
+                            updateDetailsModalContent(updatedCard.dataset);
+                        }
+                    }
                     break;
                 case 'remove_holding':
                     const quoteCurrencyRemove = getExchangeInfo()[data.exchange]?.quoteCurrency;
@@ -119,10 +129,18 @@ export function connectWebSocket() {
                             ...cardPrice.dataset, // Preserve all existing data
                             symbol: data.symbol,
                             price: data.price,
-                            percentage: data.percentage, // 24시간 변화율 추가
+                            percentage: data.percentage,
                             value: value,
+                            unrealised_pnl: data.unrealised_pnl // 백엔드에서 계산된 값 사용
                         };
                         renderCryptoCard(renderDataPrice);
+
+                        // 만약 상세 모달이 열려있고, 해당 코인의 모달이라면 내용 업데이트
+                        const modal = document.getElementById("details-modal");
+                        if (modal.style.display === "block" && modal.dataset.currentCryptoId === uniqueIdPrice) {
+                            const updatedCard = document.getElementById(uniqueIdPrice);
+                            updateDetailsModalContent(updatedCard.dataset);
+                        }
                     }
                     break;
                 case 'log':

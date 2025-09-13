@@ -51,10 +51,20 @@ class PriceManager:
         if price <= 0:
             return
 
-        # 1. 모든 추적 자산에 대해 price_update 메시지를 항상 전송합니다.
+        # 1. 미실현 손익 계산 및 캐시 업데이트
+        unrealised_pnl = self.balance_manager.update_unrealised_pnl(asset, price)
+
+        # 2. Format unrealised_pnl before sending
+        if unrealised_pnl is not None:
+            decimal_places = self.coordinator.config.get('value_decimal_places', 3)
+            quantizer = Decimal('1e-' + str(decimal_places))
+            formatted_unrealised_pnl_str = str(unrealised_pnl.quantize(quantizer))
+        else:
+            formatted_unrealised_pnl_str = None
+
+        # 3. 모든 추적 자산에 대해 price_update 메시지를 항상 전송합니다.
         percentage = 0.0
         if ticker is not None:
-            # CCXT ticker에서 percentage 값 가져오기
             percentage_raw = ticker.get('percentage')
             if percentage_raw is not None:
                 percentage = float(percentage_raw)
@@ -64,11 +74,12 @@ class PriceManager:
             'exchange': self.name,
             'symbol': symbol,
             'price': float(price),
-            'percentage': percentage  # 24시간 변화율 추가
+            'percentage': percentage,
+            'unrealised_pnl': formatted_unrealised_pnl_str
         }
         await self.app['broadcast_message'](update_message)
 
-        # 2. 만약 보유 자산이라면, 백엔드 내부 캐시에도 가격을 업데이트합니다.
+        # 4. 만약 보유 자산이라면, 백엔드 내부 캐시에도 가격을 업데이트합니다.
         if asset in self.balance_manager.balances_cache:
             self.balance_manager.update_price(asset, price)
 
