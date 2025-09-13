@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any, Dict, Set, TYPE_CHECKING, Optional
 
 from ...models.trade_models import TradeCommand
+from ...protocols import ExchangeProtocol
 
 if TYPE_CHECKING:
     from ...exchange_coordinator import ExchangeCoordinator
@@ -11,6 +12,7 @@ if TYPE_CHECKING:
 
 class OrderManager:
     """주문 관리를 전담하는 서비스 클래스"""
+    exchange: ExchangeProtocol
 
     def __init__(self, coordinator: "ExchangeCoordinator"):
         self.coordinator = coordinator
@@ -65,21 +67,28 @@ class OrderManager:
     async def initialize_orders(self, open_orders: list) -> None:
         """초기 주문 상태 초기화"""
         for order in open_orders:
-            price = Decimal(str(order.get('price') or 0))
-            amount = Decimal(str(order.get('amount') or 0))
-            filled = Decimal(str(order.get('filled') or 0))
-            stop_price = order.get('stopPrice')
+            raw_price = Decimal(str(order.get('price') or '0'))
+            amount = Decimal(str(order.get('amount') or '0'))
+            filled = Decimal(str(order.get('filled') or '0'))
+            stop_price_val = order.get('stopPrice')
+            stop_price = Decimal(str(stop_price_val)) if stop_price_val is not None else None
+
+            # 유효 가격 결정: 스탑-마켓 주문의 경우 stop_price를 사용
+            effective_price = raw_price
+            if raw_price == 0 and stop_price is not None and stop_price > 0:
+                effective_price = stop_price
+
             order_id = order.get('id')
             if order_id:
                 self.orders_cache[order_id] = {
                     'id': order_id,
                     'symbol': order.get('symbol', ''),
                     'side': order.get('side'),
-                    'price': float(price),
+                    'price': float(effective_price), # 프론트엔드로 보낼 가격
                     'stop_price': float(stop_price) if stop_price is not None else None,
                     'amount': float(amount),
                     'filled': float(filled),
-                    'value': float(price * (amount - filled)), # 미체결 수량 기준 가치
+                    'value': float(effective_price * (amount - filled)), # 미체결 수량 기준 가치
                     'timestamp': order.get('timestamp'),
                     'status': order.get('status'),
                     'is_triggered': self._is_order_triggered(order)
@@ -154,21 +163,28 @@ class OrderManager:
                 del self.orders_cache[order_id]
                 self.logger.info(f"Order {order_id} ({status}) removed from cache.")
         else: # open (partially filled 포함)
-            price = Decimal(str(order.get('price') or '0'))
+            raw_price = Decimal(str(order.get('price') or '0'))
             amount = Decimal(str(order.get('amount') or '0'))
-            stop_price = order.get('stopPrice')
+            stop_price_val = order.get('stopPrice')
+            stop_price = Decimal(str(stop_price_val)) if stop_price_val is not None else None
+
+            # 유효 가격 결정: 스탑-마켓 주문의 경우 stop_price를 사용
+            effective_price = raw_price
+            if raw_price == 0 and stop_price is not None and stop_price > 0:
+                effective_price = stop_price
+            
             self.orders_cache[order_id] = {
                 'id': order_id,
                 'symbol': order.get('symbol', ''),
                 'side': order.get('side'),
-                'price': float(price),
+                'price': float(effective_price), # 프론트엔드로 보낼 가격
                 'stop_price': float(stop_price) if stop_price is not None else None,
                 'amount': float(amount),
                 'filled': float(new_filled),
-                'value': float(price * (amount - new_filled)),
+                'value': float(effective_price * (amount - new_filled)),
                 'timestamp': order.get('timestamp'),
                 'status': status,
-                'was_stop_order': bool(stop_price),  # 스탑 주문 여부 플래그
+                'was_stop_order': bool(stop_price and stop_price > 0),  # 스탑 주문 여부 플래그
                 'is_triggered': self._is_order_triggered(order)
             }
 
@@ -240,7 +256,7 @@ class OrderManager:
 
         # 매수로 인해 새로운 자산을 보유하게 되었는지 확인
         is_new_holding = side == 'buy' and asset not in self.balance_manager.balances_cache
-        if is_new_holding:
+        if is_new_holding and symbol:
             self.logger.info(f"New asset '{asset}' acquired. Fetching initial price before updating balance.")
             try:
                 # 가격 정보를 먼저 조회하고 브로드캐스트
@@ -274,9 +290,10 @@ class OrderManager:
 
     async def execute_trade_command(self, command: TradeCommand) -> Dict[str, Any]:
         """TradeCommand를 받아 주문 생성 및 실행 (TradeExecutor의 execute 리팩토링)"""
-        if not command.symbol or not command.amount:
-            self.logger.error("거래를 실행하려면 symbol과 amount가 반드시 필요합니다.")
-            return {"status": "error", "message": "Symbol or amount is missing"}
+        if not command.symbol or not command.amount or not command.intent or not command.order_type:
+            error_msg = f"Trade command is missing required fields: {command}"
+            self.logger.error(error_msg)
+            return {"status": "error", "message": error_msg}
 
         try:
             symbol = command.symbol
@@ -306,26 +323,53 @@ class OrderManager:
                 except Exception as e:
                     self.logger.warning(f"Could not fetch initial price for {symbol}: {e}. Proceeding with order creation.")
 
-            # create_order에 필요한 파라미터들 준비
+            # TradeCommand로부터 파라미터 추출
             order_type = command.order_type
             side = command.intent
             amount = float(command.amount)
             price = float(command.price) if command.price else None
+            stop_price = float(command.stop_price) if command.stop_price else None
+            stop_limit_price = float(command.stop_limit_price) if command.stop_limit_price else None
             params = {}
+            order = None
 
-            # Stop-price가 있는 경우 params에 추가
-            if command.stop_price:
-                params['stopPrice'] = float(command.stop_price)
-                self.logger.info(f"Stop price found: {command.stop_price}")
+            # OCO 주문 여부 확인 (is_oco 플래그 사용)
+            if command.is_oco:
+                if price is None:
+                    error_msg = "OCO 주문에는 price가 필수입니다."
+                    self.logger.error(error_msg)
+                    return {"status": "error", "message": error_msg}
 
-            # 실제 주문 실행
-            self.logger.info(f"Creating {order_type} order: {side} {amount} {symbol} at price {price} with params {params}")
-            
-            # WebSocket 주문을 지원하는지 확인하여 분기 처리
-            if self.exchange.has.get('createOrderWs'):
-                order = await self.exchange.create_order_ws(symbol, order_type, side, amount, price, params)
+                if stop_price is None:
+                    error_msg = "OCO 주문에는 stop_price가 필수입니다."
+                    self.logger.error(error_msg)
+                    return {"status": "error", "message": error_msg}
+
+                self.logger.info(f"Processing OCO order using standardized 'create_oco_order' method.")
+
+                # 팩토리에서 추가해준 표준 메서드 호출
+                order = await self.exchange.create_oco_order(
+                    symbol=command.symbol,
+                    side=side,
+                    amount=amount,
+                    price=price,
+                    stop_price=stop_price,
+                    stop_limit_price=stop_limit_price,
+                    params=params
+                )
+
             else:
-                order = await self.exchange.create_order(symbol, order_type, side, amount, price, params)
+                # 일반 주문 처리 (Limit, Market, Stop-Loss 등)
+                self.logger.info(f"Processing standard order.")
+                if stop_price:
+                    params['stopPrice'] = stop_price
+                
+                self.logger.info(f"Creating {order_type} order: {side} {amount} {symbol} at price {price} with params {params}")
+                
+                if self.exchange.has.get('createOrderWs'):
+                    order = await self.exchange.create_order_ws(symbol, order_type, side, amount, price, params)
+                else:
+                    order = await self.exchange.create_order(symbol, order_type, side, amount, price, params)
 
             self.logger.info("Successfully created order")
 

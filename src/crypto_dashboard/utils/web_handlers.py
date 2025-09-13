@@ -203,6 +203,10 @@ async def handle_websocket(request):
                             continue
 
                         if command_data:
+                            # UI 표시용으로 사용된 current_price 필드가 있다면 실제 주문 전에 삭제
+                            if 'current_price' in command_data:
+                                del command_data['current_price']
+                            
                             trade_command = TradeCommand(**command_data)
                             result = await coordinator.nlp_trade_manager.execute_command(trade_command)
 

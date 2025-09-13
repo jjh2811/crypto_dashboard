@@ -19,6 +19,7 @@ class TradeIntent:
     stop_price: Optional[str] = None  # Stop 주문의 트리거 가격
     stop_limit_price: Optional[str] = None  # OCO Stop-Limit 주문의 Limit 가격
     total_cost: Optional[str] = None  # 총 주문 비용
+    is_oco: bool = False # OCO 주문 여부를 나타내는 플래그
 
 
 @dataclass
@@ -28,3 +29,4 @@ class TradeCommand(TradeIntent):
     TradeIntent를 상속받아 실제 거래에 필요한 추가 정보(예: 현재가)를 포함합니다.
     """
     current_price: Optional[float] = None # 주문 확인 시점의 현재가
+    is_oco: bool = False # OCO 주문 여부를 나타내는 플래그

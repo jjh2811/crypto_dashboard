@@ -10,6 +10,7 @@ from decimal import Decimal
 from src.crypto_dashboard.utils.nlp.entity_extractor import EntityExtractor
 from src.crypto_dashboard.utils.nlp.trade_command_parser import TradeCommandParser
 from src.crypto_dashboard.models.trade_models import TradeIntent
+from src.crypto_dashboard.protocols import ExchangeProtocol
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -89,9 +90,9 @@ async def main():
     quote_currency = exchange_config.get('quote_currency', 'USDT')
     nlptrade_config['quote_currency'] = quote_currency
 
-    # Initialize CCXT exchange
-    exchange_class = getattr(ccxt, exchange_name)
-    exchange = exchange_class({'apiKey': api_key, 'secret': api_secret})
+    # Initialize CCXT exchange using the factory
+    from src.crypto_dashboard.utils.exchange.exchange_factory import get_exchange
+    exchange: ExchangeProtocol = get_exchange(exchange_name, api_key, api_secret)
 
     try:
         # Load markets to get coin list for EntityExtractor
@@ -120,23 +121,48 @@ async def main():
                 
                 if isinstance(intent, TradeIntent):
                     logger.info(f"Parsed Intent: {intent}")
+
+                    # --- Type Guard ---
+                    # Ensure all required fields for execution are present before proceeding.
+                    if intent.symbol is None or intent.amount is None or intent.intent is None:
+                        logger.error(f"Cannot execute trade: critical information missing. Intent: {intent}")
+                        continue
                     
                     # 2. Ask for confirmation
                     confirm = await asyncio.to_thread(input, "Execute this command? (y/n): ")
                     if confirm.lower() == 'y':
-                        # 3. Execute the command
-                        params = {}
-                        if intent.stop_price:
-                            params['stopPrice'] = float(intent.stop_price)
-
-                        order = await exchange.create_order(
-                            symbol=intent.symbol,
-                            type=intent.order_type,
-                            side=intent.intent,
-                            amount=float(intent.amount) if intent.amount else None,
-                            price=float(intent.price) if intent.price else None,
-                            params=params
-                        )
+                        # 3. Execute the command using the standardized methods
+                        
+                        # By this point, the type checker knows symbol and amount are not None.
+                        if intent.is_oco:
+                            if intent.price is None or intent.stop_price is None:
+                                logger.error("OCO order requires both price and stop_price to be specified.")
+                                continue
+                            logger.info("OCO order detected. Using standardized 'create_oco_order'.")
+                            order = await exchange.create_oco_order(
+                                symbol=intent.symbol,
+                                side=intent.intent,
+                                amount=float(intent.amount),
+                                price=float(intent.price),
+                                stop_price=float(intent.stop_price),
+                                stop_limit_price=float(intent.stop_limit_price) if intent.stop_limit_price else None,
+                                params={}
+                            )
+                        else:
+                            logger.info("Standard order detected. Using 'create_order'.")
+                            params = {}
+                            if intent.stop_price:
+                                params['stopPrice'] = float(intent.stop_price)
+                            
+                            order = await exchange.create_order(
+                                symbol=intent.symbol,
+                                type=intent.order_type or 'limit', # Add a fallback for type safety
+                                side=intent.intent,
+                                amount=float(intent.amount),
+                                price=float(intent.price) if intent.price else None,
+                                params=params
+                            )
+                        
                         logger.info(f"Order execution result: {order}")
                     else:
                         logger.info("Execution cancelled.")

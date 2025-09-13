@@ -42,6 +42,7 @@ class TradeCommandParser:
 
     async def parse(self, text: str) -> Optional[TradeIntent] | str:
         """주어진 텍스트를 파싱하여 TradeIntent 객체로 변환합니다."""
+        is_oco = False
         entities = self.extractor.extract_entities(text)
         # 코인을 찾지 못한 경우 마켓 정보를 갱신하고 다시 시도
         should_refresh_markets = False
@@ -162,11 +163,12 @@ class TradeCommandParser:
                 intent = str(entities["intent"])
                 if (intent == 'buy' and final_price < current_price and final_stop_price > current_price) or \
                    (intent == 'sell' and final_price > current_price and final_stop_price < current_price):
+                    is_oco = True
                     if final_stop_limit_price is not None:
-                        order_type = "oco_stop_limit"
+                        order_type = "limit"
                         self.logger.info(f"OCO Stop-Limit order detected. Price: {final_price}, Stop: {final_stop_price}, Stop-Limit: {final_stop_limit_price}, Current: {current_price}")
                     else:
-                        order_type = "oco_stop_market"
+                        order_type = "limit"
                         self.logger.info(f"OCO Stop-Market order detected. Price: {final_price}, Stop: {final_stop_price}, Current: {current_price}")
             else:
                 self.logger.warning(f"Could not fetch current price for {coin_symbol} to check for OCO order.")
@@ -253,5 +255,6 @@ class TradeCommandParser:
             order_type=order_type,
             stop_price=str(adjusted_stop_price) if adjusted_stop_price is not None else None,
             stop_limit_price=str(adjusted_stop_limit_price) if adjusted_stop_limit_price is not None else None,
-            total_cost=str(final_total_cost) if final_total_cost is not None else None
+            total_cost=str(final_total_cost) if final_total_cost is not None else None,
+            is_oco=is_oco
         )

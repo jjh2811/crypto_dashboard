@@ -5,11 +5,13 @@ import logging
 
 from aiohttp import web
 
+from .protocols import ExchangeProtocol
 from .utils.exchange import BalanceManager, OrderManager, PriceManager, NlpTradeManager, EventHandler
 
 
 class ExchangeCoordinator:
     """거래소 관련 서비스들을 조율하는 코디네이터 클래스"""
+    exchange: ExchangeProtocol
 
     def __init__(self, api_key: str, secret_key: str, app: web.Application, exchange_name: str):
         self.name = exchange_name
@@ -37,21 +39,19 @@ class ExchangeCoordinator:
 
     def _create_exchange(self, api_key: str, secret_key: str) -> None:
         """거래소 connection 생성"""
-        import ccxt.pro as ccxtpro
+        from .utils.exchange.exchange_factory import get_exchange
 
         if 'testnet' in self.config and self.config['testnet'].get('use', False):
             self.testnet = True
             self.whitelist = self.config['testnet'].get('whitelist', [])
 
-        exchange_class = getattr(ccxtpro, self.name)
-        self.exchange = exchange_class({
-            'apiKey': api_key,
-            'secret': secret_key,
-            'enableRateLimit': True,
-            'options': {
-                'defaultType': 'spot',
-                'warnOnFetchOpenOrdersWithoutSymbol': False,
-            },
+        # Use the factory to get a configured exchange instance
+        self.exchange = get_exchange(self.name, api_key, secret_key)
+        
+        # ccxtpro's watch_* methods are available on ccxt.async_support instances too
+        self.exchange.options.update({
+            'defaultType': 'spot',
+            'warnOnFetchOpenOrdersWithoutSymbol': False,
         })
 
         if self.testnet:
