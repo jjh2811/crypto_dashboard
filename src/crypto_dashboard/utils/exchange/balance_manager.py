@@ -66,6 +66,12 @@ class BalanceManager:
                     )
                     avg_buy_price = Decimal(formatted_avg_price_str)
 
+                # Format realised_pnl and save to cache
+                if realised_pnl is not None:
+                    decimal_places = self.coordinator.config.get('value_decimal_places', 3)
+                    quantizer = Decimal('1e-' + str(decimal_places))
+                    realised_pnl = realised_pnl.quantize(quantizer)
+
                 free_amount = Decimal(str(balance.get('free', {}).get(asset, 0)))
                 locked_amount = Decimal(str(balance.get('used', {}).get(asset, 0)))
 
@@ -97,14 +103,6 @@ class BalanceManager:
         avg_buy_price = balance_data.get('avg_buy_price')
         realised_pnl = balance_data.get('realised_pnl')
 
-        # Format realised_pnl based on config before sending
-        if realised_pnl is not None:
-            decimal_places = self.coordinator.config.get('value_decimal_places', 3)
-            quantizer = Decimal('1e-' + str(decimal_places))
-            formatted_realised_pnl_str = str(realised_pnl.quantize(quantizer))
-        else:
-            formatted_realised_pnl_str = None
-
         message = {
             'type': 'portfolio_update',
             'exchange': self.name,
@@ -112,7 +110,7 @@ class BalanceManager:
             'free': str(free_amount),
             'locked': str(locked_amount),
             'avg_buy_price': str(avg_buy_price) if avg_buy_price is not None else None,
-            'realised_pnl': formatted_realised_pnl_str,
+            'realised_pnl': str(realised_pnl) if realised_pnl is not None else None,
         }
         return message
 
@@ -234,6 +232,11 @@ class BalanceManager:
         else:
             balances['realised_pnl'] += profit
 
+        # Format realised_pnl and save to cache
+        decimal_places = self.coordinator.config.get('value_decimal_places', 3)
+        quantizer = Decimal('1e-' + str(decimal_places))
+        balances['realised_pnl'] = balances['realised_pnl'].quantize(quantizer)
+
         self.logger.info(f"Realized PnL for {asset} updated by {profit}. Total: {balances['realised_pnl']}")
 
         # 업데이트된 잔고 정보 브로드캐스트
@@ -255,5 +258,10 @@ class BalanceManager:
             return balances['unrealised_pnl']
 
         unrealised_pnl = (current_price - avg_buy_price) * total_amount
-        balances['unrealised_pnl'] = unrealised_pnl
-        return unrealised_pnl
+        
+        # Format unrealised_pnl and save to cache
+        decimal_places = self.coordinator.config.get('value_decimal_places', 3)
+        quantizer = Decimal('1e-' + str(decimal_places))
+        balances['unrealised_pnl'] = unrealised_pnl.quantize(quantizer)
+        
+        return balances['unrealised_pnl']

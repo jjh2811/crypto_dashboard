@@ -51,18 +51,10 @@ class PriceManager:
         if price <= 0:
             return
 
-        # 1. 미실현 손익 계산 및 캐시 업데이트
+        # 1. 미실현 손익 계산 및 캐시 업데이트 (이제 자릿수 정리까지 포함)
         unrealised_pnl = self.balance_manager.update_unrealised_pnl(asset, price)
 
-        # 2. Format unrealised_pnl before sending
-        if unrealised_pnl is not None:
-            decimal_places = self.coordinator.config.get('value_decimal_places', 3)
-            quantizer = Decimal('1e-' + str(decimal_places))
-            formatted_unrealised_pnl_str = str(unrealised_pnl.quantize(quantizer))
-        else:
-            formatted_unrealised_pnl_str = None
-
-        # 3. 모든 추적 자산에 대해 price_update 메시지를 항상 전송합니다.
+        # 2. 모든 추적 자산에 대해 price_update 메시지를 항상 전송합니다.
         percentage = 0.0
         if ticker is not None:
             percentage_raw = ticker.get('percentage')
@@ -75,11 +67,11 @@ class PriceManager:
             'symbol': symbol,
             'price': float(price),
             'percentage': percentage,
-            'unrealised_pnl': formatted_unrealised_pnl_str
+            'unrealised_pnl': str(unrealised_pnl) if unrealised_pnl is not None else None
         }
         await self.app['broadcast_message'](update_message)
 
-        # 4. 만약 보유 자산이라면, 백엔드 내부 캐시에도 가격을 업데이트합니다.
+        # 3. 만약 보유 자산이라면, 백엔드 내부 캐시에도 가격을 업데이트합니다.
         if asset in self.balance_manager.balances_cache:
             self.balance_manager.update_price(asset, price)
 
